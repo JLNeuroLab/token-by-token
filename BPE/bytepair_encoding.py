@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import pickle
 
 # Method for getting the current directory path
-def get_dir():
-    return os.path.abspath(os.path.dirname(__file__) if '__file__' in globals() else os.getcwd())
+#def get_dir():
+ #   return os.path.abspath(os.path.dirname(__file__) if '__file__' in globals() else os.getcwd())
 
 # ------------------------Method to automatically save results------------------------------
 def save_item(item, folder = str , name = str, text_version=True, base_dir = None):
@@ -40,7 +40,6 @@ def save_item(item, folder = str , name = str, text_version=True, base_dir = Non
                     for k, v in item.items():
                         f.write(f"{k}\t{v}\n")
                 else:
-                    
                     for elem in item:
                         if isinstance(elem, tuple):
                             
@@ -80,16 +79,26 @@ def load_and_normalize(datapath=None) -> str:
     # remove everything except for characters, spaces and '
     text = re.sub(r"[^\w\s']", "", text)
     # save text
-    save_item(text, "normalized_text", "normalized_shakespeare.txt")
+    # save_item(text, "normalized_text", "normalized_shakespeare.txt")
     return text
 
 # -------------------Byte-Pair Encoding method-----------------------
-def BPE_encoder(text, max_k, pretokens=False):
-    # Here we can choose wether to feed single characters or entire words to the algorithm
-    # By defult the pretokens parameters is set to False wich leads to use single characters
-    if pretokens is True:
-        pretokens = re.findall(r"[_]?[a-zA-Z']+", text)
-        tokens = pretokens
+def BPE_encoder(text, max_k):
+    """
+        Perform byte-pair encoding algorithm over the input text
+
+        Args:
+            text = string of words separeted by _ spaces
+            max_k = number of times the algorithm merges a pair in the text
+            pretokens = (add description)
+
+        Returns:
+            tokens (list of str): Final list of tokens after BPE merges.
+            vocab_size_history (list of int): Vocabulary size at each merge step.
+            final_vocab (dict): Final vocabulary as a dictionary {token: frequency}.
+            bpe_merges (list of tuples): List of performed merges in the form 
+                                     [((token1, token2), new_token), ...].
+    """
     # Turn the text into a list of characters
     tokens = list(text)
     # Initialize list for storing the vocabulary size at each step of the training
@@ -143,9 +152,9 @@ def BPE_encoder(text, max_k, pretokens=False):
     # Obtain the final vocabulary of the tokenized text
     final_vocab = get_vocab(tokens)
     # Transform the list of tokens into a string of tokens separeted by spaces
-    tokens = " ".join(list(tokens))
+    joined_tokens = " ".join(tokens)
     # Saving all the results
-    save_item(tokens, "train_results", f"train_tokenized_k{max_k}.txt")
+    save_item(joined_tokens, "train_results", f"train_tokenized_k{max_k}.txt")
     save_item(vocab_size_history, "train_results", "train_vocab_history.pkl", text_version=False)
     save_item(final_vocab, "train_results", "train_final_vocab.pkl")
     save_item(bpe_merges, "train_results", "train_bpe_merges.pkl")
@@ -177,6 +186,23 @@ def plot_vocabulary_growth(vocab_size, max_k):
 
 # ------------------Tokenize test text with the training tokens--------------------------
 def apply_bpe_merges(text, merges):
+    """
+    Apply a sequence of Byte-Pair Encoding (BPE) merges to the input text.
+
+    This function takes raw text (as a string) and a list of BPE merge operations 
+    (usually learned from training data), and applies them sequentially to 
+    reproduce the tokenization on new/test data.
+
+    Args:
+        text (str): Input text string to tokenize, typically the test set.
+        merges (list of tuples): List of merge operations in the form 
+                                 [((token1, token2), new_token), ...] 
+                                 produced during BPE training.
+
+    Returns:
+        tokens (list of str): Tokenized version of the input text after applying all merges.
+     
+    """
     tokens = list(text)
     # We retrieve the merges of the training by retrieving the merges history
     for (pair, new_token) in merges:
@@ -214,8 +240,9 @@ def compute_coverage(test_text, vocab, merges):
 # -------------------Training----------------------
 if __name__ == "__main__":
     # Obtain normalized text
-    base_dir = os.path.abspath(os.path.dirname(__file__))
-    datapath = os.path.join(base_dir, "shakespeare.txt")
+    # base_dir = os.path.abspath(os.path.dirname(__file__))
+    project_root = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))                     # -> /project_root
+    datapath = os.path.join(project_root, "data", "Shakespeare_clean_full.txt")
     text_norm = load_and_normalize(datapath)
     # Split between train and test sets
     t_test, t_train = split_train_test(text_norm)
