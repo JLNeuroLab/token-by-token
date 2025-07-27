@@ -38,23 +38,30 @@ def generate_text(
     print(f"Starting with prompt tokens: {generated_tokens}")
 
     while len(generated_tokens) < max_length:
-        context = tuple(generated_tokens[-(n - 1) :])
-        prediction = predict_next_token_argmax(context, ngram_freqs, n)
+        prediction = None
 
-        # Fallback strategy: if trigram fails, try bigram
-        if prediction is None:
-            if len(context) > 1:
-                context_fallback = context[1:]
-                prediction = predict_next_token_argmax(
-                    context_fallback, ngram_freqs, n - 1
+        # This loop automatically tries to predict, backing off from n down to 1 (unigram)
+        for current_n in range(n, 0, -1):
+            # Get the context needed for the current n-gram size
+            context_len = current_n - 1
+            if len(generated_tokens) >= context_len:
+                context = (
+                    tuple(generated_tokens[-context_len:]) if context_len > 0 else ()
                 )
 
-            # If all fallbacks fail, stop
-            if prediction is None:
-                print("--- Context not found, stopping generation. ---")
-                break
+                # Try to predict
+                prediction = predict_next_token_argmax(context, ngram_freqs, current_n)
 
-        # Stopping condition
+                if prediction is not None:
+                    # Found a successful prediction, so stop backing off
+                    break
+
+        # If no prediction was found even after trying unigrams, stop.
+        if prediction is None:
+            print("--- Context not found, stopping generation. ---")
+            break
+
+        # Stop if the stop token is generated
         if prediction == stop_token:
             generated_tokens.append(prediction)
             print("--- Stop token generated. ---")
