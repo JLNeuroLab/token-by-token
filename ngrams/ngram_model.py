@@ -2,6 +2,7 @@ import os
 import sys
 from collections import defaultdict
 
+
 def create_ngrams(tokens: list, n: int):
     """
     Generate n-grams from a list of tokens.
@@ -14,14 +15,15 @@ def create_ngrams(tokens: list, n: int):
         list of tuples: A list containing n-grams represented as tuples of strings.
     """
     ngrams = []
-    #tokens = tokens.split("_")
+    # tokens = tokens.split("_")
     for i in range(len(tokens)):
         if i < len(tokens) - n + 1:
-            ngram = tuple(tokens[i:i+n])
+            ngram = tuple(tokens[i : i + n])
             ngrams.append(ngram)
         else:
             break
     return ngrams
+
 
 def compute_freq(ngrams: list):
     """
@@ -41,11 +43,13 @@ def compute_freq(ngrams: list):
             ngram_freq[ngram] = 1
     return dict(ngram_freq)
 
+
 def build_all_ngram_freqs(tokens: list, max_n: int):
     all_ngrams = []
     for n in range(1, max_n + 1):
         all_ngrams.extend(create_ngrams(tokens, n))
     return compute_freq(all_ngrams)
+
 
 def predict_next_word(words: list, freq_dict, n):
     """
@@ -69,13 +73,16 @@ def predict_next_word(words: list, freq_dict, n):
         else:
             best_ngram = max(freq_dict, key=freq_dict.get)
             prediction = best_ngram[-1]
-            print("No ngram found to match the word, fallback to most frequent ngram's final word")
+            print(
+                "No ngram found to match the word, fallback to most frequent ngram's final word"
+            )
     else:
         raise ValueError("The word provided does not match the ngram length")
     return prediction
 
+
 def laplace_smoothed_probs(ngram_freq, context_freq, vocab_size):
-    """ 
+    """
     Compute conditional probabilities with Laplace (Add-one) smoothing
 
     Args:
@@ -91,11 +98,12 @@ def laplace_smoothed_probs(ngram_freq, context_freq, vocab_size):
 
         context_count = context_freq.get(context, 0)
 
-        smoothed_prob = (freq + 1) / context_count + vocab_size
+        smoothed_prob = (freq + 1) / (context_count + vocab_size)
 
         laplace_probs[ngram] = smoothed_prob
 
     return laplace_probs
+
 
 def interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size):
     """
@@ -103,12 +111,12 @@ def interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size):
 
     Args:
         ngram_freq (dict): Dictionary where keys are n-gram tuples and values are their counts.
-                           This dictionary contains counts for all n-grams (unigrams, 
+                           This dictionary contains counts for all n-grams (unigrams,
                            bigrams, trigrams, etc.).
-        lambdas (dict): Dictionary of interpolation weight sets. 
+        lambdas (dict): Dictionary of interpolation weight sets.
                         Keys are labels (e.g., 'set1'), values are lists/tuples of weights
                         for each n-gram order.
-                        For example, weights for unigram, bigram, trigram probabilities 
+                        For example, weights for unigram, bigram, trigram probabilities
                         respectively.
 
     Returns:
@@ -118,7 +126,7 @@ def interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size):
     interpolated_results = {}
     for label, weights in lambdas.items():
         probs = {}
-        
+
         for ngram in ngram_freq.keys():
             total_prob = 0.0
             # len(weights) is equal to 3
@@ -130,7 +138,11 @@ def interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size):
                     count_context = ngram_freq.get(context, 0)
 
                     # Applying Laplace Smoothing
-                    prob = (count_sub_ngram + 1) / (count_context + vocab_size) if count_context > 0 else 0
+                    prob = (
+                        (count_sub_ngram + 1) / (count_context + vocab_size)
+                        if count_context > 0
+                        else 0
+                    )
                     total_prob += weights[i - 1] * prob
 
             probs[ngram] = total_prob
@@ -139,20 +151,24 @@ def interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size):
 
     return interpolated_results
 
+
 def train_ngram_model(tokens, max_n, lambdas):
     ngram_freqs = build_all_ngram_freqs(tokens, max_n)
     vocab_size = len(set(tokens))
-    interpolated_probs = interpolate_probs_with_laplace(ngram_freqs, lambdas, vocab_size)
+    interpolated_probs = interpolate_probs_with_laplace(
+        ngram_freqs, lambdas, vocab_size
+    )
     return interpolated_probs
 
+
 if __name__ == "__main__":
-    #text_path = os.path.join(module_path, "data", "Shakespeare_clean_full.txt")
-    #norm_text = load_and_normalize(text_path)
-    #tokens, vocab_history, vocab, bpe_merges = BPE_encoder(norm_text, 10)
+    # text_path = os.path.join(module_path, "data", "Shakespeare_clean_full.txt")
+    # norm_text = load_and_normalize(text_path)
+    # tokens, vocab_history, vocab, bpe_merges = BPE_encoder(norm_text, 10)
     tokens = ["the", "cat", "sat", "on", "the", "mat"]
     max_n = 3
     n_grams = create_ngrams(tokens, max_n)
- 
+
     ngram_freq = build_all_ngram_freqs(tokens, max_n)
 
     # 3. Lambda per interpolazione (somma 1)
