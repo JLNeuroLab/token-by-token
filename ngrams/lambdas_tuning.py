@@ -5,7 +5,7 @@ root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # noqa
 sys.path.insert(0, root)  # noqa
 
 from ngrams.ngram_model import train_ngram_model  # noqa
-from BPE.bytepair_encoding import load_and_normalize, BPE_encoder, apply_bpe_merges  # noqa
+from bpe.bytepair_encoding import load_and_normalize, BPE_encoder, BPE_segmenter  # noqa
 from metrics.perplexity import compute_perplexity  # noqa
 
 
@@ -23,7 +23,7 @@ def find_best_lambdas():
     max_k = 2000  # BPE merges
     n = 3  # N-gram order (trigram model)
 
-    # Load and tknz tra/val data
+    # Load and tokenize tra/val data
     train_text = load_and_normalize(datapath_train)
     validation_text = load_and_normalize(datapath_valid)
 
@@ -34,7 +34,7 @@ def find_best_lambdas():
     train_tokens, _, _, merges = BPE_encoder(train_text, max_k)
 
     # Apply the same tokenization to the validation set
-    validation_tokens = apply_bpe_merges(validation_text, merges)
+    validation_tokens = BPE_segmenter(validation_text, merges)
 
     # --- Define lambda
     print("\n--- Defining Lambda Candidates ---")
@@ -46,7 +46,7 @@ def find_best_lambdas():
         "set3 (more weight on bigram)": [0.1, 0.6, 0.3],
         "set4 (more weight on unigram)": [0.6, 0.3, 0.1],
     }
-    print(f"Will test {len(lambda_candidates)} sets of lambdas.")
+    print(f"Testing {len(lambda_candidates)} sets of lambdas.")
 
     # --- optimization loop
     print("\n--- Starting Hyperparameter Tuning ---")

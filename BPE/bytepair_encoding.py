@@ -6,12 +6,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 
-# Method for getting the current directory path
-#def get_dir():
- #   return os.path.abspath(os.path.dirname(__file__) if '__file__' in globals() else os.getcwd())
-
 # ------------------------Method to automatically save results------------------------------
 def save_item(item, folder = str , name = str, text_version=True, base_dir = None):
+    """
+    Save different type of files and creates an according folder if it does not exist
+    
+        Args:
+            item: type of file (e.g., string, list, dictionary, matplotlib figure)
+            folder: name of the folder in which the file is saved in the form of string
+            name: name that we assign to the file
+            text_version: parameter that saves some files in a reading format if set to true
+            base_dir: takes the base directory of the current file
+    
+    """
     if base_dir is None:
         base_dir = os.getcwd()
     folder = os.path.join(base_dir, folder)
@@ -68,6 +75,10 @@ def split_train_test(text, test_ratio=0.1):
 # ----------------Normalize the text: substitute wide spaces with single space, remove every character
 # except for letters, numbers and ', turn the text in lowercase
 def load_and_normalize(datapath=None) -> str:
+    """
+        Loading and normalizing the input text
+
+    """
     if datapath is None:
         raise ValueError("You must specify a datapath when importing this module")
     with open(datapath, "r", encoding="utf-8") as f:
@@ -161,7 +172,15 @@ def BPE_encoder(text, max_k):
 
     return tokens, vocab_size_history, final_vocab, bpe_merges
 
-def plot_vocabulary_growth(vocab_size, max_k):
+def plot_vocabulary_growth(vocab_size: int, max_k: int):
+    """
+        Visualize the growth of the vocabulary against the number of merges performed by BPE.
+
+        Args:
+            vocab_size: number of types in the vocabulary
+            max_k: maximum number of merges
+    
+    """
     if vocab_size is not None:
         ks_for_plt = np.linspace(10, max_k, 100, dtype=int)
         vocab_plot = [vocab_size[k - 1] if k - 1 < len(vocab_size) else vocab_size[-1] for k in ks_for_plt]
@@ -185,7 +204,7 @@ def plot_vocabulary_growth(vocab_size, max_k):
         print("No vocabulary size data available to plot.")
 
 # ------------------Tokenize test text with the training tokens--------------------------
-def apply_bpe_merges(text, merges):
+def BPE_segmenter(text, merges):
     """
     Apply a sequence of Byte-Pair Encoding (BPE) merges to the input text.
 
@@ -228,7 +247,7 @@ def apply_bpe_merges(text, merges):
 # coverage is defined by the number of tokens in the text, that the learned vocabulary from the training 
 # can cover.
 def compute_coverage(test_text, vocab, merges):
-    test_tokens = apply_bpe_merges(test_text, merges)
+    test_tokens = BPE_segmenter(test_text, merges)
     # We sum the number of tokens that are matched both in the vocabulary and the test text
     covered = sum(token in vocab for token in test_tokens)
     # Total number of tokens in the test text
@@ -253,7 +272,7 @@ if __name__ == "__main__":
     max_k = 2000
     # Train BPE on training set
     print("\nstarting Byte-Pair Encoding on train text...\n")
-    tokens, vocab_size, final_vocab, merges = BPE_encoder(t_train, max_k=max_k, pretokens=True)
+    tokens, vocab_size, final_vocab, merges = BPE_encoder(t_train, max_k=max_k)
     print("\nloop completed, train text tokenized\n")
 
     plot_vocabulary_growth(vocab_size, max_k)

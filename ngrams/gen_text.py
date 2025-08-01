@@ -10,7 +10,7 @@ sys.path.insert(0, root)  # noqa
 
 # --- Project-specific imports with #noqa to prevent auto-formatting errors ---
 from ngrams.ngram_model import build_all_ngram_freqs  # noqa
-from BPE.bytepair_encoding import load_and_normalize, BPE_encoder, apply_bpe_merges  # noqa
+from bpe.bytepair_encoding import load_and_normalize, BPE_encoder, BPE_segmenter  # noqa
 
 
 def predict_next_token_argmax(context: tuple, ngram_freqs: dict, n: int):
@@ -33,7 +33,7 @@ def generate_text(
     stop_token=".",
 ):
     """Generates a sequence of text starting from a prompt."""
-    prompt_tokens = apply_bpe_merges(prompt_text.lower(), merges)
+    prompt_tokens = BPE_segmenter(prompt_text.lower(), merges)
     generated_tokens = list(prompt_tokens)
     print(f"Starting with prompt tokens: {generated_tokens}")
 
@@ -89,33 +89,35 @@ def train_model(n, max_k=2000, force_retrain=False):
     if not force_retrain and os.path.exists(model_path) and os.path.exists(merges_path):
         print(f"--- Loading pre-trained model from {model_path} ---")
         with open(model_path, "rb") as f:
-            ngram_freq = pickle.load(f)
+            ngram_freqs = pickle.load(f)
         with open(merges_path, "rb") as f:
             merges = pickle.load(f)
-    return ngram_freq, merges
 
-    # if -t|no file then trains BPE and NG
-    if force_retrain:
-        print("--- '-t' flag detected. Forcing model retraining... ---")
+        return ngram_freqs, merges
+    
     else:
-        print("--- No pre-trained model found. Training a new one... ---")
+        # if -t|no file then trains BPE and NG
+        if force_retrain:
+            print("--- '-t' flag detected. Forcing model retraining... ---")
+        else:
+            print("--- No pre-trained model found. Training a new one... ---")
 
-    # training block
-    print("--- Training models (this might take a moment) ---")
-    datapath_train = os.path.join(root, "data", "Shakespeare_clean_train.txt")
-    train_text = load_and_normalize(datapath_train)
-    train_tokens, _, _, merges = BPE_encoder(train_text, max_k)
-    ngram_freqs = build_all_ngram_freqs(train_tokens, n)
-    print("--- Models trained ---")
+        # training block
+        print("--- Training models (this might take a moment) ---")
+        datapath_train = os.path.join(root, "data", "Shakespeare_clean_train.txt")
+        train_text = load_and_normalize(datapath_train)
+        train_tokens, _, _, merges = BPE_encoder(train_text, max_k)
+        ngram_freqs = build_all_ngram_freqs(train_tokens, n)
+        print("--- Models trained ---")
 
-    # Saves model to plk file
-    print(f"--- Saving model to {model_path} ---")
-    with open(model_path, "wb") as f:
-        pickle.dump(ngram_freqs, f)
-    with open(merges_path, "wb") as f:
-        pickle.dump(merges, f)
+        # Saves model to plk file
+        print(f"--- Saving model to {model_path} ---")
+        with open(model_path, "wb") as f:
+            pickle.dump(ngram_freqs, f)
+        with open(merges_path, "wb") as f:
+            pickle.dump(merges, f)
 
-    return ngram_freqs, merges
+        return ngram_freqs, merges
 
 
 def main(args):

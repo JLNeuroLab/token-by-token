@@ -7,6 +7,16 @@ sys.path.insert(0, project_root)
 from ngrams.ngram_model import build_all_ngram_freqs, interpolate_probs_with_laplace, create_ngrams
 
 def compute_perplexity(test_tokens: list, ngrams_probs: dict, n: int):
+    """
+        Calculates the perplexity score of the ngram model on a text.
+
+        Args:
+            test_tokens (list): tokens resulting from word tokenization of the text (BPE)
+            ngrams_probs (dict): mapping ngrams to interpolated probabilities
+            n (int): ngram order
+        Returns:
+            Perplexity score
+    """
     ngrams = create_ngrams(test_tokens, n)
     
     log_probs_sum = 0.0
@@ -32,7 +42,7 @@ if __name__ == "__main__":
 
     interpolated_probs = interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size)
 
-    test_tokens = ["the", "dog", "rushed", "on", "the", "mat"]
+    test_tokens = ["the", "cat", "sat", "on", "the", "bed"]
 
     perplexity = compute_perplexity(test_tokens, interpolated_probs["example"], n)
-    print(f"Perplexity: {perplexity}") 
+    print(f"Perplexity: {perplexity:.4f}") 
