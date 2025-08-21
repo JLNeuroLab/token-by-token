@@ -3,13 +3,14 @@ import sys
 import pickle
 from collections import defaultdict
 import argparse
+import re
 
 # --- This block makes sure Python can find your other project folders ---
 root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # noqa
 sys.path.insert(0, root)  # noqa
 
 # --- Project-specific imports with #noqa to prevent auto-formatting errors ---
-from ngrams.ngram_model import build_all_ngram_freqs  # noqa
+from ngrams.model import build_all_ngram_freqs  # noqa
 from bpe.bytepair_encoding import load_and_normalize, BPE_encoder, BPE_segmenter  # noqa
 
 
@@ -68,7 +69,10 @@ def generate_text(
             break
 
         generated_tokens.append(prediction)
-    return " ".join(generated_tokens)
+    text = " ".join(generated_tokens)
+    text = text.replace("_", " ") 
+    return text
+
 
 
 def train_model(n, max_k=2000, force_retrain=False):
@@ -167,17 +171,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # join words in single string
     args.prompt = " ".join(args.prompt).lower()
-
-    """
-    OLD IMPLEMENTATION
-    if len(sys.argv) > 1:
-        try:
-            n_arg = int(sys.argv[1])
-        except ValueError:
-            print(f"Error: N-gram order must be int. Using default n={n_arg}.")
-
-        if len(sys.argv) > 2:
-            prompt_arg = " ".join(sys.argv[2:]).lower()
-    """
 
     main(args)

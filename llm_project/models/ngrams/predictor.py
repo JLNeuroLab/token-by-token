@@ -1,5 +1,5 @@
 
-from ngrams.ngram_model import *
+from ngrams.model import *
 
 def predict_next_word(words: list, ngram_freqs, n):
     ngram_pred = defaultdict(int)

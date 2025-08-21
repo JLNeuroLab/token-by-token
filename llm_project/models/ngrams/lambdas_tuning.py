@@ -4,7 +4,7 @@ import sys
 root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # noqa
 sys.path.insert(0, root)  # noqa
 
-from ngrams.ngram_model import train_ngram_model  # noqa
+from ngrams.model import train_ngram_model  # noqa
 from bpe.bytepair_encoding import load_and_normalize, BPE_encoder, BPE_segmenter  # noqa
 from metrics.perplexity import compute_perplexity  # noqa
 

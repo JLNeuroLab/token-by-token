@@ -4,67 +4,15 @@ import re
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import pickle
 
-# ------------------------Method to automatically save results------------------------------
-def save_item(item, folder = str , name = str, text_version=True, base_dir = None):
-    """
-    Save different type of files and creates an according folder if it does not exist
-    
-        Args:
-            item: type of file (e.g., string, list, dictionary, matplotlib figure)
-            folder: name of the folder in which the file is saved in the form of string
-            name: name that we assign to the file
-            text_version: parameter that saves some files in a reading format if set to true
-            base_dir: takes the base directory of the current file
-    
-    """
-    if base_dir is None:
-        base_dir = os.getcwd()
-    folder = os.path.join(base_dir, folder)
-    os.makedirs(folder, exist_ok=True)
-    output_file = os.path.join(folder, name)
-    if isinstance(item, str):
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(item)
-        print(f"text normalized and saved: {os.path.basename(folder)}/{name}")
-
-    elif isinstance(item, plt.Figure):
-        item.savefig(output_file)
-        print(f"plot saved in: {os.path.basename(folder)}/{name}")
-
-    elif isinstance(item, (list, tuple, set, dict)):
-        with open(output_file, "wb") as f:
-            pickle.dump(item, f)
-        print(f"data saved in: {os.path.basename(folder)}/{name}")
-
-        if text_version is True:
-            text_file = os.path.splitext(output_file)[0] + ".txt"
-            with open(text_file, "w", encoding="utf-8") as f:
-
-                if isinstance(item, dict):
-                 
-                    for k, v in item.items():
-                        f.write(f"{k}\t{v}\n")
-                else:
-                    for elem in item:
-                        if isinstance(elem, tuple):
-                            
-                            f.write("\t".join(map(str, elem)) + "\n")
-                        else:
-                            f.write(str(elem) + "\n")
-                            
-            print(f"data saved in readable text: {os.path.basename(folder)}/{os.path.basename(text_file)}")
-    else:
-        raise TypeError(f"Unsupported type: {type(item)}")
-        
+from  utils.file_manager import save_item
 
 def get_vocab(text):
     vocab = defaultdict(int)
     tokens = text
     for token in tokens:
         vocab[token] += 1
-    return dict(vocab)  
+    return dict(vocab) 
 
 # Split train and test method
 def split_train_test(text, test_ratio=0.1):
@@ -88,7 +36,7 @@ def load_and_normalize(datapath=None) -> str:
     # compress spaces into single spaces
     text = re.sub(r"\s+", "_", text.strip())
     # remove everything except for characters, spaces and '
-    text = re.sub(r"[^\w\s']", "", text)
+    text = re.sub(r"[^\w\s?!.']", "", text)
     # save text
     # save_item(text, "normalized_text", "normalized_shakespeare.txt")
     return text
@@ -163,12 +111,12 @@ def BPE_encoder(text, max_k):
     # Obtain the final vocabulary of the tokenized text
     final_vocab = get_vocab(tokens)
     # Transform the list of tokens into a string of tokens separeted by spaces
-    joined_tokens = " ".join(tokens)
+    #joined_tokens = " ".join(tokens)
     # Saving all the results
-    save_item(joined_tokens, "train_results", f"train_tokenized_k{max_k}.txt")
-    save_item(vocab_size_history, "train_results", "train_vocab_history.pkl", text_version=False)
-    save_item(final_vocab, "train_results", "train_final_vocab.pkl")
-    save_item(bpe_merges, "train_results", "train_bpe_merges.pkl")
+    #save_item(joined_tokens, "train_results", f"train_tokenized_k{max_k}.txt")
+    #save_item(vocab_size_history, "train_results", "train_vocab_history.pkl", text_version=False)
+    #save_item(final_vocab, "train_results", "train_final_vocab.pkl")
+    #save_item(bpe_merges, "train_results", "train_bpe_merges.pkl")
 
     return tokens, vocab_size_history, final_vocab, bpe_merges
 
@@ -199,7 +147,7 @@ def plot_vocabulary_growth(vocab_size: int, max_k: int):
         plt.title("vocabulary size over number of merges")
         plt.legend()
         plt.tight_layout()
-        save_item(fig, "plots", "vocabulary_growth")
+        #save_item(fig, "plots", "vocabulary_growth")
     else:
         print("No vocabulary size data available to plot.")
 
@@ -239,8 +187,8 @@ def BPE_segmenter(text, merges):
         # Same procedure as the second loop of the BPE method
         tokens = new_tokens
     test_vocab = get_vocab(tokens)
-    save_item(" ".join(tokens), "test_results", "test_tokenized.txt")
-    save_item(test_vocab, "test_results", "test_final_vocab.pkl")
+    #save_item(" ".join(tokens), "test_results", "test_tokenized.txt")
+    #save_item(test_vocab, "test_results", "test_final_vocab.pkl")
     return tokens
 
 # After applying the tokenizer to the test text, evaluate the performance by computing coverage:

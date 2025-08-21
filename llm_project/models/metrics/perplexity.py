@@ -4,7 +4,7 @@ import os
 import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
-from ngrams.ngram_model import build_all_ngram_freqs, interpolate_probs_with_laplace, create_ngrams
+from ngrams.model import build_all_ngram_freqs, interpolate_probs_with_laplace, create_ngrams
 
 def compute_perplexity(test_tokens: list, ngrams_probs: dict, n: int):
     """
