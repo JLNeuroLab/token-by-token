@@ -218,13 +218,13 @@ class BPE:
         
 # -------------------Training----------------------
 if __name__ == "__main__":
-    from llm_project.utils.file_manager import save_item
-    import os
-
     # CONFIG
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     experiments_root = os.path.join(project_root, "experiments")
     print("Project root:", project_root)
+
+    from llm_project.utils.file_manager import save_item
+    import os
 
     train_results_path = os.path.join(experiments_root, "bpe_results", "train_results")  # o neural_ngram
     plots_path = os.path.join(experiments_root, "plots",)
@@ -242,8 +242,8 @@ if __name__ == "__main__":
     bpe = BPE(datapath, max_k)
 
     # load and normalize text
-    bpe.load_and_normalize()
-
+    norm_text = bpe.load_and_normalize()
+    print(norm_text)
     # Split train/test
     test_text, train_text = bpe.split_train_test()
     bpe.train_text = train_text[:10000]   
@@ -273,6 +273,10 @@ if __name__ == "__main__":
     # Save results
     save_item(" ".join(test_tokens), test_results_path, "test_tokenized.txt")
     save_item(test_tokens, test_results_path, "test_tokenized.pkl")
+
+    reconstructed_text = "".join(test_tokens)
+    save_item(reconstructed_text, test_results_path, "test_reconstructed.txt")
+    
     save_item(bpe.vocab, train_results_path, "train_final_vocab.pkl")
     save_item(bpe.vocab_size_history, train_results_path, "train_vocab_history.pkl")
     save_item(bpe.merges, train_results_path, "train_bpe_merges.pkl")
