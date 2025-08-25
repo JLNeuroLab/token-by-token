@@ -1,4 +1,4 @@
-from base_config import BaseConfig
+from configs.base_config import BaseConfig
 
 class GPTConfig(BaseConfig):
     """
@@ -23,7 +23,7 @@ class GPTCustomConfig(GPTConfig):
     # Transformer architecture
     n_layer = 8           # Number of decoder blocks in the GPT model
     n_head = 8            # Number of attention heads per block
-    n_embd = 256          # Dimension of token embeddings and hidden states
+    embd_dim = 256          # Dimension of token embeddings and hidden states
 
     # Training parameters
     batch_size = 32       # Number of sequences per batch

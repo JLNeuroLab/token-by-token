@@ -171,7 +171,7 @@ class NGram:
 
                         # Applying Laplace Smoothing
                         prob = (
-                            (count_sub_ngram + 1) / (count_context + vocab_size)
+                            (count_sub_ngram + 1) / (count_context + self.vocab_size)
                             if count_context > 0
                             else 0
                         )
