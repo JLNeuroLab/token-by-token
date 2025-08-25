@@ -1,73 +1,46 @@
-LLM_project
-├── .gitignore
-├── data
-│   ├── processed
-│   │   ├── Shakespeare_clean_test.txt
-│   │   ├── Shakespeare_clean_train.txt
-│   │   └── Shakespeare_clean_valid.txt
-│   └── raw
-│       └── Shakespeare_clean_full.txt
-├── experiments
-│   ├── plots
-│   │   └── vocabulary_growth.png
-│   └── saved_models
-│       ├── neural_ngram
-│       │   └── checkpoints
-│       │       ├── val=6.3290_epoch=5.pkl
-│       │       ├── val=6.3317_epoch=3.pkl
-│       │       ├── val=6.3341_epoch=2.pkl
-│       │       ├── val=7.5187_epoch=5.pkl
-│       │       ├── val=7.5212_epoch=3.pkl
-│       │       └── val=7.5455_epoch=2.pkl
-│       └── ngram
-│           ├── BPE_merges_k2000.pkl
-│           └── ngram_model_n3_k2000.pkl
-├── llm_project
-│   ├── bpe
-│   │   ├── bytepair_encoding.py
-│   │   ├── __init__.py
-│   │   └── __pycache__
-│   │       ├── bytepair_encoding.cpython-310.pyc
-│   │       └── __init__.cpython-310.pyc
-│   ├── models
-│   │   ├── metrics
-│   │   │   ├── perplexity.py
-│   │   │   ├── __init__.py
-│   │   │   └── __pycache__
-│   │   │       ├── perplexity.cpython-310.pyc
-│   │   │       └── __init__.cpython-310.pyc
-│   │   ├── neural_ngrams
-│   │   │   ├── model.py
-│   │   │   ├── __init__.py
-│   │   │   └── __pycache__
-│   │   │       ├── model.cpython-310.pyc
-│   │   │       ├── utils.cpython-310.pyc
-│   │   │       └── __init__.cpython-310.pyc
-│   │   └── ngrams
-│   │       ├── gen_text.py
-│   │       ├── lambdas_tuning.py
-│   │       ├── model.py
-│   │       ├── predictor.py
-│   │       ├── __init__.py
-│   │       └── __pycache__
-│   │           ├── ngram_model.cpython-310.pyc
-│   │           └── __init__.cpython-310.pyc
-│   └── utils
-│       ├── file_manager.py
-│       ├── token_mapping.py
-│       ├── __init__.py
-│       └── __pycache__
-│           ├── file_manager.cpython-310.pyc
-│           └── __init__.cpython-310.pyc
-├── main.py
-├── test_results
-│   ├── test_final_vocab.pkl
-│   ├── test_final_vocab.txt
-│   └── test_tokenized.txt
-└── train_results
-    ├── train_bpe_merges.pkl
-    ├── train_bpe_merges.txt
-    ├── train_final_vocab.pkl
-    ├── train_final_vocab.txt
-    ├── train_tokenized_k2000.txt
-    └── train_vocab_history.pkl
+📦 LLM_project/
+├──── 📂 .git/
+├──── 📂 .vscode/
+├──── 📂 data/
+│     ├──── 📂 processed/
+│     │     ├──── 📄 Shakespeare_clean_test.txt
+│     │     ├──── 📄 Shakespeare_clean_train.txt
+│     │     └──── 📄 Shakespeare_clean_valid.txt
+│     └──── 📂 raw/
+│           └──── 📄 Shakespeare_clean_full.txt
+├──── 📂 experiments/
+│     ├──── 📂 bpe_results/
+│     │     ├──── 📂 test_results/
+│     │     └──── 📂 train_results/
+│     ├──── 📂 plots/
+│     │     └──── 📄 vocabulary_growth.png
+│     └──── 📂 saved_models/
+│           ├──── 📂 neural_ngram/
+│           │     └──── 📂 checkpoints/
+│           └──── 📂 ngram/
+├──── 📂 llm_project/
+│     ├──── 📂 bpe/
+│     │     ├──── 📄 __init__.py
+│     │     └──── 📄 bytepair_encoding.py
+│     ├──── 📂 models/
+│     │     ├──── 📂 gpt/
+│     │     │     └──── 📂 model.py/
+│     │     ├──── 📂 metrics/
+│     │     │     ├──── 📄 __init__.py
+│     │     │     └──── 📄 perplexity.py
+│     │     ├──── 📂 neural_ngrams/
+│     │     │     ├──── 📄 __init__.py
+│     │     │     └──── 📄 model.py
+│     │     └──── 📂 ngrams/
+│     │           ├──── 📄 __init__.py
+│     │           ├──── 📄 gen_text.py
+│     │           ├──── 📄 lambdas_tuning.py
+│     │           ├──── 📄 model.py
+│     │           └──── 📄 predictor.py
+│     └──── 📂 utils/
+│           ├──── 📄 __init__.py
+│           ├──── 📄 file_manager.py
+│           └──── 📄 token_mapping.py
+├──── 📄 .gitignore
+├──── 📄 LLM_project.txt
+└──── 📄 main.py

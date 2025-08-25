@@ -2,197 +2,212 @@ import os
 import sys
 from collections import defaultdict
 
+class NGram:
 
-def create_ngrams(tokens: list, n: int):
-    """
-    Generate n-grams from a list of tokens.
+    def __init__(self, tokens, n):
+        self.tokens = tokens
+        self.n = n
+        self.max_n = n
+        self.ngrams = []
+        self.ngram_freqs = {}
+        self.vocab = set(tokens)
+        self.vocab_size = len(self.vocab)
+        self.total_ngrams = 0
+        self.lambdas = {}
 
-    Args:
-        tokens (list of str): List of tokens (e.g., output of BPE encoding).
-        n (int): Size of the n-gram (e.g., 1 for unigram, 2 for bigram, etc.).
+    def create_ngrams(self, n=None):
+        """
+        Generate n-grams from a list of tokens.
 
-    Returns:
-        list of tuples: A list containing n-grams represented as tuples of strings.
-    """
-    ngrams = []
-    # tokens = tokens.split("_")
-    for i in range(len(tokens)):
-        if i < len(tokens) - n + 1:
-            ngram = tuple(tokens[i : i + n])
+        Args:
+            tokens (list of str): List of tokens (e.g., output of BPE encoding).
+            n (int): Size of the n-gram (e.g., 1 for unigram, 2 for bigram, etc.).
+
+        Returns:
+            list of tuples: A list containing n-grams represented as tuples of strings.
+        """
+        if n is None:
+            n = self.n
+        ngrams = []
+        # tokens = tokens.split("_")
+        for i in range(len(self.tokens) - self.n + 1):
+            ngram = tuple(self.tokens[i : i + self.n])
             ngrams.append(ngram)
-        else:
-            break
-    return ngrams
+        self.ngrams = ngrams
+        return ngrams
 
+    def compute_freq(self, ngrams=None):
+        """
+        Count the frequency of each n-gram in the input list.
 
-def compute_freq(ngrams: list):
-    """
-    Count the frequency of each n-gram in the input list.
+        Args:
+            ngrams (list of tuples): List of n-grams (tuples of tokens).
 
-    Args:
-        ngrams (list of tuples): List of n-grams (tuples of tokens).
+        Returns:
+            dict: Dictionary where keys are n-gram tuples and values are their frequency counts.
+        """
+        if ngrams is None:
+            ngrams = self.ngrams
 
-    Returns:
-        dict: Dictionary where keys are n-gram tuples and values are their frequency counts.
-    """
-    ngram_freq = defaultdict(int)
-    for ngram in ngrams:
-        if ngram in ngram_freq:
+        ngram_freq = defaultdict(int)
+        for ngram in ngrams:
             ngram_freq[ngram] += 1
+        
+        self.ngram_freqs = dict(ngram_freq)
+        self.total_ngrams = sum(ngram_freq.values())
+        return dict(ngram_freq)
+
+
+    def build_all_ngram_freqs(self, max_n):
+        """
+        Combine create_ngrams and compute_freq to get n-gram frequencies.
+
+        Args:
+            tokens (list of str): Input token list.
+            max_n (int): Max n-gram size (e.g., 3 for unigrams to trigrams).
+
+        Returns:
+            dict: Maps n-gram tuples to their frequency count.
+        """
+        all_ngrams = []
+        for n in range(1, max_n + 1):
+            all_ngrams.extend(self.create_ngrams(n))
+        self.max_n = max_n
+        return self.compute_freq(all_ngrams)
+
+
+    def predict(self, context):
+        """
+        Predict next word from an input list of words
+
+        Args:
+            words = list of words or subwords
+            freq_dict = dictionary of counts returned from compute_freq
+            n = length of ngrams
+
+            returns most probable word
+        """
+        ngram_pred = {}
+        if len(context) == self.n - 1:
+            for ngram, frequency in self.ngram_freqs.items():
+                if list(ngram[:-1]) == context:
+                    ngram_pred[ngram] = frequency
+            if ngram_pred:
+                best_ngram = max(ngram_pred, key=ngram_pred.get)
+                prediction = best_ngram[-1]
+            else:
+                best_ngram = max(self.ngram_freqs, key=self.ngram_freqs.get)
+                prediction = best_ngram[-1]
+                print(
+                    "No ngram found to match the word, fallback to most frequent ngram's final word"
+                )
         else:
-            ngram_freq[ngram] = 1
-    return dict(ngram_freq)
+            raise ValueError("The word provided does not match the ngram length")
+        return prediction
 
 
-def build_all_ngram_freqs(tokens: list, max_n: int):
-    """
-    Combine create_ngrams and compute_freq to get n-gram frequencies.
+    def laplace_smoothed_probs(self):
+        """
+        Compute conditional probabilities with Laplace (Add-one) smoothing
 
-    Args:
-        tokens (list of str): Input token list.
-        max_n (int): Max n-gram size (e.g., 3 for unigrams to trigrams).
+        Args:
+            ngram_freq = dictionary with ngrams and corresponding counts
+            context_freq = dictionary with (n-1)-grams counts
+            vocab_size = total number of unique tokens
 
-    Returns:
-        dict: Maps n-gram tuples to their frequency count.
-    """
-    all_ngrams = []
-    for n in range(1, max_n + 1):
-        all_ngrams.extend(create_ngrams(tokens, n))
-    return compute_freq(all_ngrams)
+        returns: dictionary with smoothed ngram probabilities
+        """
+        laplace_probs = {}
+        vocab_size = len(self.vocab)
+        for ngram, freq in self.ngram_freqs.items():
+            context = ngram[:-1]
 
+            context_count = sum(freq for key, freq in self.ngram_freqs.items()
+                                if key[:-1] == context)
 
-def predict_next_word(words: list, freq_dict, n):
-    """
-    Predict next word from an input list of words
+            smoothed_prob = (freq + 1) / (context_count + vocab_size)
 
-    Args:
-        words = list of words or subwords
-        freq_dict = dictionary of counts returned from compute_freq
-        n = length of ngrams
+            laplace_probs[ngram] = smoothed_prob
 
-        returns most probable word
-    """
-    ngram_pred = defaultdict(int)
-    if len(words) == n - 1:
-        for ngram, frequency in freq_dict.items():
-            if list(ngram[:-1]) == words:
-                ngram_pred[ngram] = frequency
-        if ngram_pred:
-            best_ngram = max(ngram_pred, key=ngram_pred.get)
-            prediction = best_ngram[-1]
-        else:
-            best_ngram = max(freq_dict, key=freq_dict.get)
-            prediction = best_ngram[-1]
-            print(
-                "No ngram found to match the word, fallback to most frequent ngram's final word"
-            )
-    else:
-        raise ValueError("The word provided does not match the ngram length")
-    return prediction
+        return laplace_probs
 
 
-def laplace_smoothed_probs(ngram_freq, context_freq, vocab_size):
-    """
-    Compute conditional probabilities with Laplace (Add-one) smoothing
+    def interpolate_probs_with_laplace(self, lambdas):
+        """
+        Perform interpolation of probabilities for n-grams of different lengths.
 
-    Args:
-        ngram_freq = dictionary with ngrams and corresponding counts
-        context_freq = dictionary with (n-1)-grams counts
-        vocab_size = total number of unique tokens
+        Args:
+            lambdas (dict): Dictionary of interpolation weight sets.
+                            Keys are labels (e.g., 'set1'), values are lists/tuples of weights
+                            for each n-gram order.
+                            For example, weights for unigram, bigram, trigram probabilities
+                            respectively.
 
-    returns: dictionary with smoothed ngram probabilities
-    """
-    laplace_probs = {}
-    for ngram, freq in ngram_freq.items():
-        context = ngram[:-1]
+        Returns:
+            dict: A dictionary where each key is a label from lambdas, and each value is another dictionary.
+                This inner dictionary maps each n-gram to its interpolated probability.
+        """
+        interpolated_results = {}
+        # Loop over sets of lambads and corresponding weights
+        for label, weights in lambdas.items():
+            probs = {}
+            # Loop over ngrams (keys in dict of ngram frequencies)
+            for ngram in self.ngram_freqs.keys():
+                # total probability score
+                total_prob = 0.0
+                # Loop over each lambda in the set (starting from 1, 0_gram not helpful)
+                for i in range(1, len(weights) + 1):
+                    # Check if ngram lenghts is greater than idx of weights.
+                    # This avoids considering ngrams of lenght smaller than the number of weights
+                    if len(ngram) >= i:
+                        # Find subgram (n-1_gram) of current ngram
+                        sub_ngram = ngram[-i:]
+                        # Find context of subgram
+                        context = sub_ngram[:-1]
+                        # get the frequencies of both from ngram_freq
+                        count_sub_ngram = self.ngram_freqs.get(sub_ngram, 0)
+                        count_context = sum(freq for key, freq in self.ngram_freqs.items()
+                                if key[:-1] == context)
 
-        context_count = context_freq.get(context, 0)
+                        # Applying Laplace Smoothing
+                        prob = (
+                            (count_sub_ngram + 1) / (count_context + vocab_size)
+                            if count_context > 0
+                            else 0
+                        )
+                        # Update total probability by adding the weighted sum of lamda times its
+                        # interpolated probabiltiy
+                        # weights is a list of labdas of the correspondig ngram order
+                        total_prob += weights[i - 1] * prob
+                # Update the dictionary with interpolated probability of the corresponding ngram in the vocabulary
+                probs[ngram] = total_prob
+            # Add probs to the corresponding set of lambas in the dictionary
+            interpolated_results[label] = probs
 
-        smoothed_prob = (freq + 1) / (context_count + vocab_size)
-
-        laplace_probs[ngram] = smoothed_prob
-
-    return laplace_probs
-
-
-def interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size):
-    """
-    Perform interpolation of probabilities for n-grams of different lengths.
-
-    Args:
-        ngram_freq (dict): Dictionary where keys are n-gram tuples and values are their counts.
-                           This dictionary contains counts for all n-grams (unigrams,
-                           bigrams, trigrams, etc.).
-        lambdas (dict): Dictionary of interpolation weight sets.
-                        Keys are labels (e.g., 'set1'), values are lists/tuples of weights
-                        for each n-gram order.
-                        For example, weights for unigram, bigram, trigram probabilities
-                        respectively.
-
-    Returns:
-        dict: A dictionary where each key is a label from lambdas, and each value is another dictionary.
-              This inner dictionary maps each n-gram to its interpolated probability.
-    """
-    interpolated_results = {}
-    # Loop over sets of lambads and corresponding weights
-    for label, weights in lambdas.items():
-        probs = {}
-        # Loop over ngrams (keys in dict of ngram frequencies)
-        for ngram in ngram_freq.keys():
-            # total probability score
-            total_prob = 0.0
-            # Loop over each lambda in the set (starting from 1, 0_gram not helpful)
-            for i in range(1, len(weights) + 1):
-                # Check if ngram lenghts is greater than idx of weights.
-                # This avoids considering ngrams of lenght smaller than the number of weights
-                if len(ngram) >= i:
-                    # Find subgram (n-1_gram) of current ngram
-                    sub_ngram = ngram[-i:]
-                    # Find context of subgram
-                    context = sub_ngram[:-1]
-                    # get the frequencies of both from ngram_freq
-                    count_sub_ngram = ngram_freq.get(sub_ngram, 0)
-                    count_context = ngram_freq.get(context, 0)
-
-                    # Applying Laplace Smoothing
-                    prob = (
-                        (count_sub_ngram + 1) / (count_context + vocab_size)
-                        if count_context > 0
-                        else 0
-                    )
-                    # Update total probability by adding the weighted sum of lamda times its
-                    # interpolated probabiltiy
-                    # weights is a list of labdas of the correspondig ngram order
-                    total_prob += weights[i - 1] * prob
-            # Update the dictionary with interpolated probability of the corresponding ngram in the vocabulary
-            probs[ngram] = total_prob
-        # Add probs to the corresponding set of lambas in the dictionary
-        interpolated_results[label] = probs
-
-    return interpolated_results
+        return interpolated_results
 
 
-def train_ngram_model(tokens, max_n, lambdas):
-    """
-    Train an n-gram language model with Laplace interpolation.
+    def fit(self, tokens, max_n, lambdas):
+        """
+        Train an n-gram language model with Laplace interpolation.
 
-    Combines `build_all_ngram_freqs` and `interpolate_probs_with_laplace`
-    to compute smoothed n-gram probabilities.
+        Combines `build_all_ngram_freqs` and `interpolate_probs_with_laplace`
+        to compute smoothed n-gram probabilities.
 
-    Args:
-        tokens (list of str): Input token list.
-        max_n (int): Maximum n-gram size.
-        lambdas (list of float): Interpolation weights for each n-gram order.
+        Args:
+            tokens (list of str): Input token list.
+            max_n (int): Maximum n-gram size.
+            lambdas (list of float): Interpolation weights for each n-gram order.
 
-    Returns:
-        dict: Mapping of n-grams to interpolated probabilities.
-    """
-    ngram_freqs = build_all_ngram_freqs(tokens, max_n)
-    vocab_size = len(set(tokens))
-    interpolated_probs = interpolate_probs_with_laplace(
-        ngram_freqs, lambdas, vocab_size
-    )
-    return interpolated_probs
+        Returns:
+            dict: Mapping of n-grams to interpolated probabilities.
+        """
+        ngram_freqs = self.build_all_ngram_freqs(tokens, self.max_n)
+        vocab_size = len(set(tokens))
+        interpolated_probs = self.interpolate_probs_with_laplace(
+            ngram_freqs, lambdas, vocab_size
+        )
+        return interpolated_probs
 
 
 if __name__ == "__main__":

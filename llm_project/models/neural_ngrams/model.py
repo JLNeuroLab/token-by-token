@@ -139,7 +139,11 @@ class NeuralNgram:
     # ------------- CHECKPOINTS ------------------
     def save_checkpoint(self, folder, name):
         """
-        Usa save_item per salvare i parametri del modello
+        Uses save_item for saving the  parameters of the model
+
+        Args:
+            folder (str): folder where checkpoint is saved
+            name (str): checkpoint filename
         """
         print("saving checkpoint")
         state = {
@@ -213,7 +217,7 @@ class NeuralNgram:
         step = 0
         patience_counter = 0
         checkpoints = []
-        #------ TRAINING-----------
+        #---------- TRAINING-----------
         for epoch in range(epochs):
 
             n_batches = len(data_ids) // self.batch_size

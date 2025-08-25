@@ -1,4 +1,42 @@
+# Ignore VS Code settings
+.vscode/
+
+# Ignore Git internal folder
+.git/
+
+# Ignore dependencies
+node_modules/
+
+# Ignore Python cache files (match any folder named __pycache__)
+**/__pycache__
+# Ignore compiled Python files
 *.pyc
-train_results
-test_results
-plots
+
+# Ignore saved model files
+*.pkl
+
+# Ignore experiment result folders
+experiments/bpe_results/test_results/
+experiments/bpe_results/train_results/
+# Ignore VS Code settings
+.vscode/
+
+# Ignore Git internal folder
+.git/
+
+# Ignore dependencies
+node_modules/
+
+# Ignore Python cache files (match any folder named __pycache__)
+**/__pycache__
+# Ignore compiled Python files
+*.pyc
+
+# Ignore saved model files
+*.pkl
+
+# Ignore experiment result folders
+experiments/bpe_results/test_results/
+experiments/bpe_results/train_results/
+experiments/saved_models/
+experiments/plots/

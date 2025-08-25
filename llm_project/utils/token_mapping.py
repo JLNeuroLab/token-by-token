@@ -1,4 +1,3 @@
-import numpy as np
 
 def token_id_mapping(tokens=None, ids=None, decode=False):
     """
