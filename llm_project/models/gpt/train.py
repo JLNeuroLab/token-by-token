@@ -15,7 +15,7 @@ import os
 # --- Configuration ---
 BATCH_SIZE = 32
 BLOCK_SIZE = 64
-MAX_ITERS = 5000
+MAX_ITERS = 8000
 EVAL_INTERVAL = 500
 LEARNING_RATE = 3e-4
 EVAL_ITERS = 200
@@ -33,15 +33,7 @@ device = torch.device(device)
 
 
 # Data Loading and Preparation
-data_path = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "..",
-    "..",
-    "data",
-    "raw",
-    "Shakespeare_clean_full.txt",
-)
+data_path = os.path.join("data", "raw", "Shakespeare_clean_full.txt")
 with open(data_path, "r", encoding="utf-8") as f:
     text = f.read()
 
@@ -56,9 +48,11 @@ tokenizer = BPE(data_path, max_k=2000)
 # id_to_token = {i: token for token, i in token_to_id.items()}
 
 # Caching Logic for saving time on debbug
-project_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..")
-)
+# project_root = os.path.abspath(
+#     os.path.join(os.path.dirname(__file__), "..", "..", "..")
+# )
+
+project_root = os.getcwd()
 bpe_results_folder = os.path.join("experiments", "bpe_results", "train_results")
 merges_file = "train_bpe_merges.pkl"
 vocab_file = "train_final_vocab.pkl"
@@ -138,10 +132,10 @@ class GPTConfig:
     embd_dim = 128
     n_layer = 4
     n_head = 4
-    dropout = 0.1
-    embd_pdrop = 0.1
-    attn_pdrop = 0.1
-    resid_pdrop = 0.1
+    dropout = 0.2
+    embd_pdrop = 0.2
+    attn_pdrop = 0.2
+    resid_pdrop = 0.2
 
 
 config = GPTConfig()
@@ -213,7 +207,8 @@ print("Training finished.")
 
 
 # Save the Model
-save_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "saved_models")
+# save_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "saved_models")
+save_path = os.path.join("saved_models")
 os.makedirs(save_path, exist_ok=True)
 model_save_path = os.path.join(save_path, "gpt_shakespeare.pth")
 print(f"Saving model to {model_save_path}")

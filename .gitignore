@@ -7,36 +7,23 @@
 # Ignore dependencies
 node_modules/
 
-# Ignore Python cache files (match any folder named __pycache__)
-**/__pycache__
-# Ignore compiled Python files
-*.pyc
-
 # Ignore saved model files
 *.pkl
+*.pth
 
-# Ignore experiment result folders
-experiments/bpe_results/test_results/
-experiments/bpe_results/train_results/
-# Ignore VS Code settings
+# Python cache
+**/__pycache__/
+*.pyc
+
+# Editor-specific files
 .vscode/
 
-# Ignore Git internal folder
-.git/
+# Project-specific output folders
+# This single line ignores all experiment results and plots
+/experiments/
 
-# Ignore dependencies
-node_modules/
+# This ignores all saved models, including .pth and .pkl files
+/saved_models/
 
-# Ignore Python cache files (match any folder named __pycache__)
-**/__pycache__
-# Ignore compiled Python files
-*.pyc
-
-# Ignore saved model files
-*.pkl
-
-# Ignore experiment result folders
-experiments/bpe_results/test_results/
-experiments/bpe_results/train_results/
-experiments/saved_models/
-experiments/plots/
+# Ignore the results JSON file directly
+tuning_results.json
