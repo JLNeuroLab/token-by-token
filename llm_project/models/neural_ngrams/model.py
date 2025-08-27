@@ -1,10 +1,11 @@
 import numpy as np
 import os
 import sys
+import matplotlib.pyplot as plt
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
-from utils.file_manager import save_item, load_item
+from llm_project.utils.file_manager import save_item, load_item
 
 def get_batch(data_ids, block_size, batch_size):
     """
@@ -263,7 +264,23 @@ class NeuralNgram:
                     return losses, val_losses
 
         return losses, val_losses
-    
+    #  ---------------- PLOTTING LOSS CURVE -------------------
+    def plot_loss(self, train_losses, val_losses=None):
+        
+        plt.figure(figsize=(8, 6))
+        plt.plot(train_losses, label="Train loss", color="blue")
+
+        if val_losses:
+            steps_per_epoch = len(train_losses) // len(val_losses)
+            x_vals = [i * steps_per_epoch for i in range(len(steps_per_epoch))]
+            plt.plot(x_vals, val_losses, label="Validation loss", color="red")
+
+        plt.xlabel("Step")
+        plt.ylabel("Loss")
+        plt.title("Training and Validation Loss")
+        plt.legend()
+        plt.grid(True, linestyle="--", alpha=0.6)
+        plt.show()
     # ---------------- GENERATION -------------------
     def generate(self,
                 start_ids, 
@@ -326,9 +343,8 @@ class NeuralNgram:
 
 if __name__ == "__main__":
     import os
-    from utils.file_manager import save_item
-    from utils.token_mapping import token_id_mapping
-    from bpe.bytepair_encoding import load_and_normalize, BPE_encoder, BPE_segmenter, plot_vocabulary_growth
+    from llm_project.utils.token_mapping import token_id_mapping
+    from llm_project.bpe.bytepair_encoding import BPE
 
     # ---------------- CONFIG -----------------
     project_root = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
@@ -345,17 +361,19 @@ if __name__ == "__main__":
     checkpoint_dir = os.path.join(os.getcwd(), "saved_models", "neural_ngram", "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
     # ---------------- LOAD AND NORMALIZE TEXT -----------------
-    t_train = load_and_normalize(train_path)
-    t_valid = load_and_normalize(val_path)
+    bpe = BPE(data_path=train_path, max_k=max_k)
+    bpe.train_text = bpe.load_and_normalize()
+    bpe.test_text = bpe.load_and_normalize()
 
+    t_train, t_valid = bpe.train_text, bpe.test_text
     # (Optional) truncate for faster testing
     t_train = t_train[:10000]
     t_valid = t_valid[:1000]
     print(f"Train size (chars): {len(t_train)}, Test size (chars): {len(t_valid)}")
 
     # ---------------- TRAIN BPE -----------------
-    tokens, vocab_size_history, final_vocab, merges = BPE_encoder(t_train, max_k=max_k)
-    plot_vocabulary_growth(vocab_size_history, max_k)
+    tokens, vocab_size_history, final_vocab, merges = bpe.BPE_encoder()
+    bpe.plot_vocabulary_growth()
 
     # ---------------- CONVERT TEXT TO IDS -----------------
     # Build simple mapping token <-> id
@@ -364,7 +382,7 @@ if __name__ == "__main__":
 
     # Encode training and validation text
     train_ids = [token2id[tok] for tok in tokens if tok in token2id]
-    test_tokens = BPE_segmenter(t_valid, merges)
+    test_tokens = bpe.BPE_segmenter(t_valid)
     val_ids = [token2id[tok] for tok in test_tokens if tok in token2id]
 
     # ---------------- INITIALIZE MODEL -----------------
@@ -383,6 +401,7 @@ if __name__ == "__main__":
         load_ckpt_name="val=6.3290_epoch=5.pkl",
         force_train=False
     )
+    model.plot_loss(losses, val_losses)
     print("Training completed!")
 
     # ---------------- GENERATE SAMPLE -----------------

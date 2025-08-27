@@ -11,11 +11,22 @@ def get_vocab(text):
             vocab[token] += 1
         return dict(vocab) 
 
+def normalize_text(text):
+# lower case text
+    text = text.lower()
+    # compress spaces into single spaces
+    text = re.sub(r"\s+", "_", text.strip())
+    # remove everything except for characters, spaces and '
+    text = re.sub(r"[^\w\s?!.']", "", text)
+    # save text
+    # save_item(text, "normalized_text", "normalized_shakespeare.txt")
+    return text
+
 class BPE:
-    def __init__(self, data_path, max_k):
+    def __init__(self, max_k, data_path=None, text=None):
         # text attributes
         self.datapath = data_path
-        self.text = None
+        self.text = text
         self.train_text = None  
         self.test_text = None
 
@@ -40,19 +51,13 @@ class BPE:
             Loading and normalizing the input text
 
         """
-        if self.datapath is None:
-            raise ValueError("You must specify a datapath when importing this module")
-        with open(self.datapath, "r", encoding="utf-8") as f:
-            self.text = f.read()
-        # lower case text
-        self.text = self.text.lower()
-        # compress spaces into single spaces
-        self.text = re.sub(r"\s+", "_", self.text.strip())
-        # remove everything except for characters, spaces and '
-        self.text = re.sub(r"[^\w\s?!.']", "", self.text)
-        # save text
-        # save_item(text, "normalized_text", "normalized_shakespeare.txt")
-        return self.text
+        if self.text is None and self.datapath is not None:
+            with open(self.datapath, "r", encoding="utf-8") as f:
+                self.text = f.read()
+        elif self.text is None:
+            raise ValueError("You must specify a datapath or provide a raw text when importing this module")
+        norm_text = normalize_text(self.text)
+        return norm_text
 
     # -------------------Byte-Pair Encoding method-----------------------
     def BPE_encoder(self):

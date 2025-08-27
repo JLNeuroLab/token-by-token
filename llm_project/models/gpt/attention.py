@@ -18,8 +18,7 @@ class CausalSelfAttention(nn.Module):
             n_heads (int): Number of attention heads.
             embd_dim (int): Dimensionality of input embeddings.
             head_dim (int): Dimensionality per attention head (embd_dim / n_heads).
-            c_attn (nn.Linear): Linear layer projecting input embeddings into 
-                concatenated queries, keys, and values.
+            c_attn (nn.Linear): Linear layer projecting input embeddings into concatenated queries, keys, and values.
             c_proj (nn.Linear): Output linear projection after attention.
             attn_dropout (nn.Dropout): Dropout applied to attention weights.
             resid_dropout (nn.Dropout): Dropout applied to the residual connection.
@@ -135,7 +134,7 @@ class CausalSelfAttention(nn.Module):
 if __name__ == "__main__":
     from configs.gpt_config import GPTCustomConfig
     # create config instance
-    config = GPTCustomConfig(vocab_size=5000)  # o qualsiasi valore di vocab_size
+    config = GPTCustomConfig(vocab_size=5000)
 
     # create attention layer
     attn = CausalSelfAttention(config)
@@ -144,7 +143,7 @@ if __name__ == "__main__":
     x = torch.randn(2, config.block_size, config.embd_dim)
     
     # forward pass
-    y = attn(x)
+    y = attn.forward(x)
     
     print("Input shape:", x.shape)
     print("Output shape:", y.shape)
