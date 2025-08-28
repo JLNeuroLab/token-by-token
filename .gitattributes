@@ -1,5 +1,6 @@
 # Default: text files normalized to LF in repo
 * text=auto eol=lf
+*.py text eol=lf
 
 # Explicit for common text types
 *.py     text eol=lf

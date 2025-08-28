@@ -1,3 +1,5 @@
+from tqdm import trange  # at top
+import sys
 from collections import defaultdict
 import re
 import os
@@ -109,14 +111,13 @@ class BPE:
         tokens = list(self.text)
         self.tokens = tokens.copy()
         # Training loop over k
-        for step in range(self.max_k):
-            if (step + 1) % 100 == 0:
-                print(f"BPE merge: {step + 1}/{self.max_k}")
-            # Initialize default dictionary
-            if (step + 1) % 100 == 0:
-                print(f"BPE merge: {step + 1}/{self.max_k}")
+        for step in trange(self.max_k, desc="Training BPE", ncols=100):
+            # New track for bpe merges
+            if (step + 1) % 50 == 0 or step == 0:
+                print(f"[BPE] Merge step {step + 1}/{self.max_k}", flush=True)
+                sys.stdout.flush()
 
-            frequencies = defaultdict(int)
+                frequencies = defaultdict(int)
             # Iteration over all the tokens in the text, we exclude the last one
             for i in range(len(tokens) - 1):
                 # A pair is defined by adjecent tokens in the text

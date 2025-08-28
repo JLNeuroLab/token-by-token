@@ -130,9 +130,9 @@ def main():
         if iter_num % EVAL_INTERVAL == 0 or iter_num == MAX_ITERS - 1:
             losses = estimate_loss()
             print(
-                f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+                f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}",
+                flush=True,
             )
-
         xb, yb = get_batch("train")
 
         with torch.cuda.amp.autocast(enabled=use_amp):
