@@ -1,5 +1,6 @@
 import os
 import sys
+import numpy as np
 from collections import defaultdict
 
 class NGram:
@@ -14,6 +15,7 @@ class NGram:
         self.vocab_size = len(self.vocab)
         self.total_ngrams = 0
         self.lambdas = {}
+        self.interpolated_probs = {}
 
     def create_ngrams(self, n=None):
         """
@@ -30,8 +32,8 @@ class NGram:
             n = self.n
         ngrams = []
         # tokens = tokens.split("_")
-        for i in range(len(self.tokens) - self.n + 1):
-            ngram = tuple(self.tokens[i : i + self.n])
+        for i in range(len(self.tokens) - n + 1):
+            ngram = tuple(self.tokens[i : i + n])
             ngrams.append(ngram)
         self.ngrams = ngrams
         return ngrams
@@ -58,7 +60,7 @@ class NGram:
         return dict(ngram_freq)
 
 
-    def build_all_ngram_freqs(self, max_n):
+    def build_all_ngram_freqs(self, max_n=None):
         """
         Combine create_ngrams and compute_freq to get n-gram frequencies.
 
@@ -69,41 +71,29 @@ class NGram:
         Returns:
             dict: Maps n-gram tuples to their frequency count.
         """
+        if max_n is None:
+            max_n = self.max_n
+
         all_ngrams = []
         for n in range(1, max_n + 1):
             all_ngrams.extend(self.create_ngrams(n))
-        self.max_n = max_n
         return self.compute_freq(all_ngrams)
 
+    def predict_next_token_sampling(self, context):
+        probs = self.interpolated_probs.get("best", {})
+        candidates = {}
 
-    def predict(self, context):
-        """
-        Predict next word from an input list of words
+        for ngram, p in probs.items():
+            if ngram[:-1] == context:
+                candidates[ngram[-1]] = candidates.get(ngram[-1], 0) + p
 
-        Args:
-            words = list of words or subwords
-            freq_dict = dictionary of counts returned from compute_freq
-            n = length of ngrams
+        if not candidates:
+            return None
 
-            returns most probable word
-        """
-        ngram_pred = {}
-        if len(context) == self.n - 1:
-            for ngram, frequency in self.ngram_freqs.items():
-                if list(ngram[:-1]) == context:
-                    ngram_pred[ngram] = frequency
-            if ngram_pred:
-                best_ngram = max(ngram_pred, key=ngram_pred.get)
-                prediction = best_ngram[-1]
-            else:
-                best_ngram = max(self.ngram_freqs, key=self.ngram_freqs.get)
-                prediction = best_ngram[-1]
-                print(
-                    "No ngram found to match the word, fallback to most frequent ngram's final word"
-                )
-        else:
-            raise ValueError("The word provided does not match the ngram length")
-        return prediction
+        tokens, ps = zip(*candidates.items())
+        ps = np.array(ps, dtype=float)
+        ps /= ps.sum() 
+        return np.random.choice(tokens, p=ps)
 
 
     def laplace_smoothed_probs(self):
@@ -130,7 +120,6 @@ class NGram:
             laplace_probs[ngram] = smoothed_prob
 
         return laplace_probs
-
 
     def interpolate_probs_with_laplace(self, lambdas):
         """
@@ -183,60 +172,50 @@ class NGram:
                 probs[ngram] = total_prob
             # Add probs to the corresponding set of lambas in the dictionary
             interpolated_results[label] = probs
-
+            self.interpolated_probs = interpolated_results
         return interpolated_results
 
+    def generate_text(self,
+        prompt_tokens: str,
+        max_length=30,
+        stop_token=".",
+        ):
+        """Generates a sequence of text starting from a prompt."""
+        generated_tokens = list(prompt_tokens)
+        print(f"Starting with prompt tokens: {generated_tokens}")
 
-    def fit(self, tokens, max_n, lambdas):
-        """
-        Train an n-gram language model with Laplace interpolation.
+        while len(generated_tokens) < max_length:
+            prediction = None
 
-        Combines `build_all_ngram_freqs` and `interpolate_probs_with_laplace`
-        to compute smoothed n-gram probabilities.
+            # This loop automatically tries to predict, backing off from n down to 1 (unigram)
+            for current_n in range(self.n, 0, -1):
+                # Get the context needed for the current n-gram size
+                context_len = current_n - 1
+                if len(generated_tokens) >= context_len:
+                    context = (
+                        tuple(generated_tokens[-context_len:]) if context_len > 0 else ()
+                    )
 
-        Args:
-            tokens (list of str): Input token list.
-            max_n (int): Maximum n-gram size.
-            lambdas (list of float): Interpolation weights for each n-gram order.
+                    # Try to predict
+                    prediction = self.predict_next_token_sampling(context)
 
-        Returns:
-            dict: Mapping of n-grams to interpolated probabilities.
-        """
-        ngram_freqs = self.build_all_ngram_freqs(tokens, self.max_n)
-        vocab_size = len(set(tokens))
-        interpolated_probs = self.interpolate_probs_with_laplace(
-            ngram_freqs, lambdas, vocab_size
-        )
-        return interpolated_probs
+                    if prediction is not None:
+                        # Found a successful prediction, so stop backing off
+                        break
+
+            # If no prediction was found even after trying unigrams, stop.
+            if prediction is None:
+                print("--- Context not found, stopping generation. ---")
+                prediction = np.random.choice(self.tokens)
 
 
-if __name__ == "__main__":
-    # text_path = os.path.join(module_path, "data", "Shakespeare_clean_full.txt")
-    # norm_text = load_and_normalize(text_path)
-    # tokens, vocab_history, vocab, bpe_merges = BPE_encoder(norm_text, 10)
-    tokens = ["the", "cat", "sat", "on", "the", "mat"]
-    max_n = 3
-    n_grams = create_ngrams(tokens, max_n)
+            # Stop if the stop token is generated
+            if prediction == stop_token:
+                generated_tokens.append(prediction)
+                print("--- Stop token generated. ---")
+                break
 
-    ngram_freq = build_all_ngram_freqs(tokens, max_n)
-
-    # 3. Lambda per interpolazione (somma 1)
-    lambdas = {"example": [0.1, 0.3, 0.6]}
-
-    # 4. Calcola vocab_size
-    vocab = set(tokens)
-    vocab_size = len(vocab)
-
-    # 5. Usa funzione con Laplace smoothing integrato
-    interpolated_probs = interpolate_probs_with_laplace(ngram_freq, lambdas, vocab_size)
-
-    # 6. Stampa alcune probabilità di prova
-    print("Interpolated probabilities for 'the cat sat':")
-    test_ngram = ("the", "cat", "sat")
-    print(interpolated_probs["example"].get(test_ngram, "N-gram not found"))
-
-    # 7. Controllo rapido (esempio)
-    for ngram, prob in interpolated_probs["example"].items():
-        assert 0 <= prob <= 1, f"Probability out of range for {ngram}: {prob}"
-
-    print("Test passed: all probabilities between 0 and 1")
+            generated_tokens.append(prediction)
+        text = " ".join(generated_tokens)
+        text = text.replace("_", " ") 
+        return text

@@ -33,7 +33,15 @@ device = torch.device(device)
 
 
 # Data Loading and Preparation
-data_path = os.path.join("data", "raw", "Shakespeare_clean_full.txt")
+data_path = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "data",
+    "raw",
+    "Shakespeare_clean_full.txt",
+)
 with open(data_path, "r", encoding="utf-8") as f:
     text = f.read()
 
@@ -53,7 +61,9 @@ tokenizer = BPE(data_path, max_k=2000)
 # )
 
 project_root = os.getcwd()
-bpe_results_folder = os.path.join("experiments", "bpe_results", "train_results")
+
+bpe_results_folder = os.path.join(
+    "experiments", "bpe_results", "train_results")
 merges_file = "train_bpe_merges.pkl"
 vocab_file = "train_final_vocab.pkl"
 
@@ -118,9 +128,9 @@ val_data = data[n:]
 def get_batch(split):
     data = train_data if split == "train" else val_data
     ix = torch.randint(len(data) - BLOCK_SIZE, (BATCH_SIZE,))
-    x = torch.stack([data[i : i + BLOCK_SIZE] for i in ix])
+    x = torch.stack([data[i: i + BLOCK_SIZE] for i in ix])
     # The target sequence is shifted by one position
-    y = torch.stack([data[i + 1 : i + BLOCK_SIZE + 1] for i in ix])
+    y = torch.stack([data[i + 1: i + BLOCK_SIZE + 1] for i in ix])
     x, y = x.to(device), y.to(device)
     return x, y
 
@@ -207,8 +217,13 @@ print("Training finished.")
 
 
 # Save the Model
+<< << << < HEAD
 # save_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "saved_models")
 save_path = os.path.join("saved_models")
+== == == =
+save_path = os.path.join(os.path.dirname(
+    __file__), "..", "..", "..", "saved_models")
+>>>>>> > origin/jacopo_branch
 os.makedirs(save_path, exist_ok=True)
 model_save_path = os.path.join(save_path, "gpt_shakespeare.pth")
 print(f"Saving model to {model_save_path}")
