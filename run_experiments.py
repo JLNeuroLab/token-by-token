@@ -43,320 +43,320 @@ experiments = [
             "max_k": 2000,
         },
     },
-    # # --- Exploring Model Depth (n_layer) ---
-    # {
-    #     "name": "C_deeper_model_more_dropout",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 6,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "D_very_deep_model",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 8,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "E_shallow_model",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 2,
-    #         "dropout": 0.1,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # # --- Exploring Model Width (embd_dim) ---
-    # {
-    #     "name": "F_wider_model",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 256,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "G_very_wide_model",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 384,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "H_narrow_model",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 64,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # # --- Exploring BPE Merges (max_k) ---
-    # {
-    #     "name": "I_bpe_merges_1000",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "max_k": 1000,
-    #     },
-    # },
-    # {
-    #     "name": "J_bpe_merges_3000",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "max_k": 3000,
-    #     },
-    # },
-    # {
-    #     "name": "K_bpe_merges_4000",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "max_k": 4000,
-    #     },
-    # },
-    # # --- Exploring Learning Rate ---
-    # {
-    #     "name": "L_lower_learning_rate",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "LEARNING_RATE": 1e-4,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "M_higher_learning_rate",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "LEARNING_RATE": 5e-4,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # # --- Exploring Batch Size ---
-    # {
-    #     "name": "N_larger_batch_size",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "BATCH_SIZE": 64,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "O_smaller_batch_size",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "BATCH_SIZE": 16,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # # --- Combination Experiments (trying to find a new best) ---
-    # {
-    #     "name": "P_wide_and_deep",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 256,
-    #         "n_layer": 6,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "Q_wide_and_more_dropout",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 256,
-    #         "n_layer": 4,
-    #         "dropout": 0.3,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "R_deep_and_more_dropout",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 6,
-    #         "dropout": 0.3,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "S_best_model_fewer_merges",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "max_k": 1000,
-    #     },
-    # },
-    # {
-    #     "name": "T_best_model_longer_training",
-    #     "params": {
-    #         "MAX_ITERS": 12000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # # --- Added 12 More Experiments ---
-    # {
-    #     "name": "U_wider_deeper_more_dropout",
-    #     "params": {
-    #         "MAX_ITERS": 10000,
-    #         "embd_dim": 256,
-    #         "n_layer": 6,
-    #         "dropout": 0.3,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "V_very_wide_less_deep",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 384,
-    #         "n_layer": 2,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "W_best_model_more_merges",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "max_k": 3000,
-    #     },
-    # },
-    # {
-    #     "name": "X_extreme_dropout",
-    #     "params": {
-    #         "MAX_ITERS": 10000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.4,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "Y_larger_block_size",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "BLOCK_SIZE": 128,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "Z_more_heads_deeper",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 6,
-    #         "n_head": 8,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "AA_wide_and_shallow",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 384,
-    #         "n_layer": 2,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "AB_best_config_lower_lr",
-    #     "params": {
-    #         "MAX_ITERS": 10000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "LEARNING_RATE": 1e-4,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "AC_very_small_model",
-    #     "params": {
-    #         "MAX_ITERS": 5000,
-    #         "embd_dim": 64,
-    #         "n_layer": 2,
-    #         "dropout": 0.1,
-    #         "max_k": 1000,
-    #     },
-    # },
-    # {
-    #     "name": "AD_wide_less_dropout",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 256,
-    #         "n_layer": 4,
-    #         "dropout": 0.1,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "AE_deep_less_dropout",
-    #     "params": {
-    #         "MAX_ITERS": 8000,
-    #         "embd_dim": 128,
-    #         "n_layer": 6,
-    #         "dropout": 0.1,
-    #         "max_k": 2000,
-    #     },
-    # },
-    # {
-    #     "name": "AF_best_model_longest_training",
-    #     "params": {
-    #         "MAX_ITERS": 15000,
-    #         "embd_dim": 128,
-    #         "n_layer": 4,
-    #         "dropout": 0.2,
-    #         "max_k": 2000,
-    #     },
-    # },
+    # --- Exploring Model Depth (n_layer) ---
+    {
+        "name": "C_deeper_model_more_dropout",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 6,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "D_very_deep_model",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 8,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "E_shallow_model",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 2,
+            "dropout": 0.1,
+            "max_k": 2000,
+        },
+    },
+    # --- Exploring Model Width (embd_dim) ---
+    {
+        "name": "F_wider_model",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 256,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "G_very_wide_model",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 384,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "H_narrow_model",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 64,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "max_k": 2000,
+        },
+    },
+    # --- Exploring BPE Merges (max_k) ---
+    {
+        "name": "I_bpe_merges_1000",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "max_k": 1000,
+        },
+    },
+    {
+        "name": "J_bpe_merges_3000",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "max_k": 3000,
+        },
+    },
+    {
+        "name": "K_bpe_merges_4000",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "max_k": 4000,
+        },
+    },
+    # --- Exploring Learning Rate ---
+    {
+        "name": "L_lower_learning_rate",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "LEARNING_RATE": 1e-4,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "M_higher_learning_rate",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "LEARNING_RATE": 5e-4,
+            "max_k": 2000,
+        },
+    },
+    # --- Exploring Batch Size ---
+    {
+        "name": "N_larger_batch_size",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "BATCH_SIZE": 64,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "O_smaller_batch_size",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "BATCH_SIZE": 16,
+            "max_k": 2000,
+        },
+    },
+    # --- Combination Experiments (trying to find a new best) ---
+    {
+        "name": "P_wide_and_deep",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 256,
+            "n_layer": 6,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "Q_wide_and_more_dropout",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 256,
+            "n_layer": 4,
+            "dropout": 0.3,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "R_deep_and_more_dropout",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 6,
+            "dropout": 0.3,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "S_best_model_fewer_merges",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 1000,
+        },
+    },
+    {
+        "name": "T_best_model_longer_training",
+        "params": {
+            "MAX_ITERS": 12000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    # --- Added 12 More Experiments ---
+    {
+        "name": "U_wider_deeper_more_dropout",
+        "params": {
+            "MAX_ITERS": 10000,
+            "embd_dim": 256,
+            "n_layer": 6,
+            "dropout": 0.3,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "V_very_wide_less_deep",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 384,
+            "n_layer": 2,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "W_best_model_more_merges",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 3000,
+        },
+    },
+    {
+        "name": "X_extreme_dropout",
+        "params": {
+            "MAX_ITERS": 10000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.4,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "Y_larger_block_size",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "BLOCK_SIZE": 128,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "Z_more_heads_deeper",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 6,
+            "n_head": 8,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "AA_wide_and_shallow",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 384,
+            "n_layer": 2,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "AB_best_config_lower_lr",
+        "params": {
+            "MAX_ITERS": 10000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "LEARNING_RATE": 1e-4,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "AC_very_small_model",
+        "params": {
+            "MAX_ITERS": 5000,
+            "embd_dim": 64,
+            "n_layer": 2,
+            "dropout": 0.1,
+            "max_k": 1000,
+        },
+    },
+    {
+        "name": "AD_wide_less_dropout",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 256,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "AE_deep_less_dropout",
+        "params": {
+            "MAX_ITERS": 8000,
+            "embd_dim": 128,
+            "n_layer": 6,
+            "dropout": 0.1,
+            "max_k": 2000,
+        },
+    },
+    {
+        "name": "AF_best_model_longest_training",
+        "params": {
+            "MAX_ITERS": 15000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 2000,
+        },
+    },
 ]
 
 
