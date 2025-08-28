@@ -30,6 +30,10 @@ class BPE:
         self.train_text = None  
         self.test_text = None
 
+        # Mappings
+        self.token_to_id = {}
+        self.id_to_token = {}
+
         # bpe attributes
         self.max_k = max_k
         self.norm_text = None
@@ -37,6 +41,23 @@ class BPE:
         self.vocab_size_history = []
         self.vocab = {}
         self.merges = []
+
+    # Methods enc/dec/map
+    def build_token_mappings(self):
+        """Creates the token-to-ID and ID-to-token mappings from the vocab."""
+        vocab_list = list(self.vocab.keys())
+        self.token_to_id = {token: i for i, token in enumerate(vocab_list)}
+        self.id_to_token = {i: token for token, i in self.token_to_id.items()}
+
+    def encode(self, text_to_encode):
+        """Encodes a string into a list of token IDs."""
+        segmented_tokens = self.BPE_segmenter(text_to_encode)
+        return [self.token_to_id.get(t, -1) for t in segmented_tokens]
+
+    def decode(self, ids_to_decode):
+        """Decodes a list of token IDs back into a string."""
+        text = "".join([self.id_to_token.get(i, "") for i in ids_to_decode])
+        return text.replace("_", " ")
 
     # Split train and test method
     def split_train_test(self, test_ratio=0.1):
@@ -81,6 +102,9 @@ class BPE:
         self.tokens = tokens.copy()
         # Training loop over k
         for step in range(self.max_k):
+            
+            if (step + 1) % 100 == 0:
+                print(f"BPE merge: {step + 1}/{self.max_k}")
             # Initialize default dictionary
             frequencies = defaultdict(int)
             # Iteration over all the tokens in the text, we exclude the last one 
@@ -125,6 +149,8 @@ class BPE:
             #print(f"step {step}: merged {most_freq} in {new_token}")
         # Obtain the final vocabulary of the tokenized text
         self.vocab = get_vocab(tokens)
+        print("BPE training done")
+        self.build_token_mappings()
         
     def plot_vocabulary_growth(self):
         """
