@@ -89,17 +89,18 @@ def main():
 
     # Model and Optimizer
     class GPTConfig:
-        vocab_size = vocab_size
-        block_size = BLOCK_SIZE
-        embd_dim = 128
-        n_layer = 4
-        n_head = 4
-        dropout = 0.2
-        embd_pdrop = 0.2
-        attn_pdrop = 0.2
-        resid_pdrop = 0.2
+        def __init__(self, vocab_size, block_size):
+            self.vocab_size = vocab_size
+            self.block_size = block_size
+            self.embd_dim = 128
+            self.n_layer = 4
+            self.n_head = 4
+            self.dropout = 0.2
+            self.embd_pdrop = 0.2
+            self.attn_pdrop = 0.2
+            self.resid_pdrop = 0.2
 
-    config = GPTConfig()
+    config = GPTConfig(vocab_size, BLOCK_SIZE)
     model = GPT(config)
     model.to(device)
 
