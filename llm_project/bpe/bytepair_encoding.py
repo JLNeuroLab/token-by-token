@@ -157,8 +157,16 @@ class BPE:
             # Add the size of the vocabulary to the vocabulary history
             self.vocab_size_history.append(len(get_vocab(tokens)))
             # print(f"step {step}: merged {most_freq} in {new_token}")
+
         # Obtain the final vocabulary of the tokenized text
-        self.vocab = get_vocab(tokens)
+        initial_vocab = get_vocab(list(self.text))
+        # Create a dictionary of all tokens created during merges
+        # Freq isn't critical here
+        merged_tokens_vocab = {merge[1]: 0 for merge in self.merges}
+        # Combine them to create a complete vocabulary
+        full_vocab = {**initial_vocab, **merged_tokens_vocab}
+        self.vocab = full_vocab
+
         print("BPE training done")
         self.build_token_mappings()
 

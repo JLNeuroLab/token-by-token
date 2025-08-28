@@ -1,8 +1,18 @@
 # Ignore VS Code settings
 .vscode/
+.idea/
+
+# Ignore python build stuff
+*.egg-info/
+dist/
+build/
 
 # Ignore Git internal folder
 .git/
+
+# OS
+. DS_Store
+Thumbs.db
 
 # Ignore dependencies
 node_modules/
