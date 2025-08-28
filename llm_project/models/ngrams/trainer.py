@@ -39,13 +39,19 @@ class NGramTrainer:
 
         # basic argument without need of training
         if not force_retrain and os.path.exists(model_path) and os.path.exists(merges_path):
+            # -----------
             print(f"--- Loading pre-trained model from {model_path} ---")
             model_data = load_item(model_dir, model_fname)
             self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
             self.model.ngram_freqs = model_data["ngram_freqs"]
             self.model.lambdas = model_data["lambdas"]
             self.model.interpolated_probs = model_data["interpolated_probs"]
+
+            # --- Load BPE merges and recreate BPE instance ---
             self.merges = load_item(model_dir, merges_fname)
+            self.bpe = BPE(max_k=max_k, text=None)
+            self.bpe.merges = self.merges
+            self.bpe.tokens = self.model.tokens
             return self.model, self.merges
                 
         else:
@@ -59,7 +65,7 @@ class NGramTrainer:
             print("--- Training BPE (this might take a moment) ---")
             train_text = load_shakespeare("train")
             train_text = train_text[:10000]
-            print(f"using only {len(train_text)}")
+            print(f"using only {len(train_text)} of training set")
 
             self.bpe = BPE(max_k=self.max_k, text=train_text)
             norm_text = self.bpe.load_and_normalize()
@@ -189,33 +195,27 @@ class NGramTrainer:
         return best_lambdas, lowest_perplexity, best_model_probs
 
 if __name__ == "__main__":
-    # Load datasets
+    # --- Load datasets ---
     train_text = load_shakespeare("train")[:10000]
     valid_text = load_shakespeare("validation")[:1000]
-    print(f"Train size: {len(train_text)}\nValidation size: {len(valid_text)}")
+    print(f"Train size: {len(train_text)}, Validation size: {len(valid_text)}")
 
-    # Parameters
+    # --- Hyperparameters ---
     max_k = 2000
     n = 3
 
-    # Tokenizer
-    tokenizer = BPE(max_k=max_k, text=train_text)
-    norm_text = tokenizer.load_and_normalize()
-    tokenizer.BPE_encoder()
-    tokens = tokenizer.tokens
+    # --- Initialize trainer without pre-created BPE ---
+    trainer = NGramTrainer(model=None, tokens=None, n=n, max_k=max_k)
 
-    # Model
-    model = NGram(tokens=tokens, n=n)
-    print("Model initialized")
+    # --- Train BPE and NGram model (train() gestisce tutto) ---
+    model, merges = trainer.train(tune_lambdas=True)
+    print("Training completed.")
 
-    # Training
-    trainer = NGramTrainer(model=model, tokens=tokens, n=n, max_k=max_k)
-    trainer.train(tune_lambdas=True)
-    print("Training loop completed")
-
+    # --- Generate text ---
     prompt_text = "The"
     prompt_text = normalize_text(prompt_text)
-    prompt_tokens = tokenizer.BPE_segmenter(prompt_text)
-    generated = model.generate_text(prompt_tokens, max_length=20)
+    prompt_tokens = trainer.bpe.BPE_segmenter(prompt_text)
+
+    generated_tokens = model.generate_text(prompt_tokens, max_length=20)
     print("\nGenerated text:")
-    print(generated)
+    print(generated_tokens)

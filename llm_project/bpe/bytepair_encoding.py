@@ -28,11 +28,11 @@ def normalize_text(text):
 
 
 class BPE:
-    def __init__(self, max_k, data_path=None, text=None):
+    def __init__(self, max_k, datapath=None, text=None):
         # text attributes
-        self.datapath = data_path
+        self.datapath = datapath
 
-        self.datapath = data_path
+        self.datapath = datapath
         self.text = text
         self.train_text = None
         self.test_text = None
@@ -306,11 +306,10 @@ if __name__ == "__main__":
     # set k value
     max_k = 2000
     # Initialize tokenizer
-    bpe = BPE(datapath, max_k)
+    bpe = BPE(max_k=max_k, datapath=datapath)
 
     # load and normalize text
     norm_text = bpe.load_and_normalize()
-    print(norm_text)
     # Split train/test
     test_text, train_text = bpe.split_train_test()
     bpe.train_text = train_text[:10000]
@@ -336,14 +335,3 @@ if __name__ == "__main__":
     coverage = bpe.compute_coverage(test_tokens)
     print("-" * 80)
     print(f"[RESULTS]:\nCoverage score for k = {max_k}: {coverage:.4f}\n")
-
-    # Save results
-    save_item(" ".join(test_tokens), test_results_path, "test_tokenized.txt")
-    save_item(test_tokens, test_results_path, "test_tokenized.pkl")
-
-    reconstructed_text = "".join(test_tokens)
-    save_item(reconstructed_text, test_results_path, "test_reconstructed.txt")
-
-    save_item(bpe.vocab, train_results_path, "train_final_vocab.pkl")
-    save_item(bpe.vocab_size_history, train_results_path, "train_vocab_history.pkl")
-    save_item(bpe.merges, train_results_path, "train_bpe_merges.pkl")
