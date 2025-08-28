@@ -142,7 +142,6 @@ if __name__ == "__main__":
     from configs.gpt_config import GPTCustomConfig
 
     # create config instance
-    # o qualsiasi valore di vocab_size
     config = GPTCustomConfig(vocab_size=5000)
 
     # create attention layer

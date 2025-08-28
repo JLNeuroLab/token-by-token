@@ -138,7 +138,7 @@ class NeuralNgram:
         np.add.at(self.embeddings, X_batch, -lr * dE)
 
     # ------------- CHECKPOINTS ------------------
-    def save_checkpoint(self, folder, name):
+    def save_checkpoint(self, folder, name, losses=None, val_losses=None):
         """
         Uses save_item for saving the  parameters of the model
 
@@ -150,7 +150,9 @@ class NeuralNgram:
         state = {
             "embeddings": self.embeddings,
             "W": self.W,
-            "b": self.b
+            "b": self.b,
+            "losses": losses,
+            "val_losses": val_losses
         }
         save_item(state, folder=folder, name=name, text_version=False)
 
@@ -174,7 +176,10 @@ class NeuralNgram:
         self.embeddings = checkpoint["embeddings"]
         self.W = checkpoint["W"]
         self.b = checkpoint["b"]
+        losses = checkpoint.get("losses", [])
+        val_losses = checkpoint.get("val_losses", [])   
         print(f"Checkpoint loaded: {os.path.join(folder, name)}")
+        return losses, val_losses
 
     # ------------- TRAINING --------------
     def fit(self, data_ids,
@@ -246,7 +251,7 @@ class NeuralNgram:
                     best_val_loss = val_loss
                     patience_counter = 0
                     ckpt_path = f"val={val_loss:.4f}_epoch={epoch+1}.pkl"
-                    self.save_checkpoint(checkpoint_dir, ckpt_path)
+                    self.save_checkpoint(checkpoint_dir, ckpt_path, losses=losses, val_losses=val_losses)
                     checkpoints.append((val_loss, ckpt_path))
                     checkpoints.sort(key=lambda x: x[0])
 
@@ -272,7 +277,8 @@ class NeuralNgram:
 
         if val_losses:
             steps_per_epoch = len(train_losses) // len(val_losses)
-            x_vals = [i * steps_per_epoch for i in range(len(steps_per_epoch))]
+            x_vals = [i * steps_per_epoch for i in range(len(val_losses))]
+
             plt.plot(x_vals, val_losses, label="Validation loss", color="red")
 
         plt.xlabel("Step")
@@ -347,9 +353,11 @@ if __name__ == "__main__":
     from llm_project.bpe.bytepair_encoding import BPE
 
     # ---------------- CONFIG -----------------
-    project_root = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
-    train_path = os.path.join(project_root, "data", "Shakespeare_clean_train.txt")
-    val_path = os.path.join(project_root, "data", "Shakespeare_clean_valid.txt")
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    saved_models_dir = os.path.join(project_root, "experiments", "saved_models", "neural_ngram")
+    os.makedirs(saved_models_dir, exist_ok=True)
+    train_path = os.path.join(project_root, "data", "processed", "Shakespeare_clean_train.txt")
+    val_path   = os.path.join(project_root, "data", "processed", "Shakespeare_clean_valid.txt")
 
     # N-gram model params
     n = 3
@@ -358,8 +366,9 @@ if __name__ == "__main__":
     epochs = 5
     lr = 0.01
     max_k = 2000
-    checkpoint_dir = os.path.join(os.getcwd(), "saved_models", "neural_ngram", "checkpoints")
+    checkpoint_dir = os.path.join(saved_models_dir, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
+
     # ---------------- LOAD AND NORMALIZE TEXT -----------------
     bpe = BPE(data_path=train_path, max_k=max_k)
     bpe.train_text = bpe.load_and_normalize()
@@ -372,23 +381,27 @@ if __name__ == "__main__":
     print(f"Train size (chars): {len(t_train)}, Test size (chars): {len(t_valid)}")
 
     # ---------------- TRAIN BPE -----------------
-    tokens, vocab_size_history, final_vocab, merges = bpe.BPE_encoder()
-    bpe.plot_vocabulary_growth()
+    bpe.BPE_encoder()
+    print(f"DEBUG: Number of tokens after BPE: {len(bpe.tokens)}")
+    #bpe.plot_vocabulary_growth()
 
     # ---------------- CONVERT TEXT TO IDS -----------------
     # Build simple mapping token <-> id
-    token2id = token_id_mapping(tokens)
-    id2token = token_id_mapping(token2id, decode=True)
+    token2id, id2token, _ = token_id_mapping(bpe.tokens)
+
 
     # Encode training and validation text
-    train_ids = [token2id[tok] for tok in tokens if tok in token2id]
+    train_ids = [token2id[tok] for tok in bpe.tokens if tok in token2id]
     test_tokens = bpe.BPE_segmenter(t_valid)
     val_ids = [token2id[tok] for tok in test_tokens if tok in token2id]
+    print(f"DEBUG: Length of train_ids: {len(train_ids)}, Length of val_ids: {len(val_ids)}")
+    print(f"DEBUG: Sample of train_ids: {train_ids[:20]}")
 
     # ---------------- INITIALIZE MODEL -----------------
     model = NeuralNgram(n=n, vocab_size=len(token2id), block_size=block_size, batch_size=batch_size)
-
+    print(f"DEBUG: Model initialized with vocab size {len(token2id)}")
     # ---------------- TRAIN MODEL -----------------
+    print("DEBUG: Starting training...")
     losses, val_losses = model.fit(
         data_ids=train_ids,
         val_ids=val_ids,
@@ -398,9 +411,11 @@ if __name__ == "__main__":
         print_every=50,
         max_checkpoints=3,
         patience=3,
-        load_ckpt_name="val=6.3290_epoch=5.pkl",
+        load_ckpt_name="val=3.4184_epoch=2.pkl",
         force_train=False
     )
+    print("DEBUG: Training finished")
+    losses, val_losses = model.load_checkpoint(checkpoint_dir, "val=3.4184_epoch=2.pkl")
     model.plot_loss(losses, val_losses)
     print("Training completed!")
 
