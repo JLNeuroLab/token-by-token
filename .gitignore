@@ -38,3 +38,6 @@ node_modules/
 
 # Ignore the results JSON file directly
 tuning_results.json
+
+# Ignore the tree graph of the project
+LLM_project.txt
