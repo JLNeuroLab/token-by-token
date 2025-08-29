@@ -3,21 +3,8 @@ import subprocess
 import json
 import re
 from datetime import datetime
-
-# --- Helper Class for Terminal Colors ---
-
-
-class Colors:
-    HEADER = "\033[95m"
-    OKBLUE = "\033[94m"
-    OKCYAN = "\033[96m"
-    OKGREEN = "\033[92m"
-    WARNING = "\033[93m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-
+import argparse
+from llm_project.utils.debugg_utils import Colors
 
 # --- 1. Define Your Experiments ---
 # An expanded suite of 32 experiments to run overnight.
@@ -30,7 +17,7 @@ experiments = [
             "embd_dim": 128,
             "n_layer": 4,
             "dropout": 0.1,
-            "max_k": 2000,
+            "max_k": 650,
         },
     },
     {
@@ -379,7 +366,7 @@ os.makedirs(os.path.dirname(results_file_path), exist_ok=True)
 # --- 3. Main Experiment Loop ---
 
 
-def run_all_experiments():
+def run_all_experiments(args):
     all_results = []
 
     if os.path.exists(results_file_path):
@@ -396,6 +383,8 @@ def run_all_experiments():
             f"{Colors.OKBLUE}[STARTING]{Colors.ENDC} Experiment {i + 1}/{len(experiments)}: {Colors.BOLD}{exp_name}{Colors.ENDC}"
         )
         print(f"   Parameters: {params}")
+        if args.override_k:
+            params["max_k"] = args.override_k
 
         if "max_k" in params:
             expected_cache_name = f"bpe_merges_k{params['max_k']}.pkl"
@@ -513,4 +502,7 @@ def run_all_experiments():
 
 
 if __name__ == "__main__":
-    run_all_experiments()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--override_k", type=int, help="Override max_k for BPE steps")
+    args = parser.parse_args()
+    run_all_experiments(args)

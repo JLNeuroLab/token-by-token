@@ -1,4 +1,7 @@
-from llm_project.bpe.bytepair_encoding import BPE
+import os
+import shutil
+import psutil
+from llm_project.bpe.bytepair_encoding import BPE, print_resource_usage
 
 
 def test_bpe_encode_decode_round_trip():
@@ -8,7 +11,7 @@ def test_bpe_encode_decode_round_trip():
     """
     # ARRANGE
     training_text = "ab ab ab ac"
-    bpe = BPE(max_k=1, text=training_text)
+    bpe = BPE(max_k=100, text=training_text)
     bpe.BPE_encoder()
     original_string = "ab ac"
 
@@ -27,7 +30,7 @@ def test_bpe_selects_most_frequent_pair():
     """
     # ARRANGE
     training_text = "aaababa"
-    bpe = BPE(max_k=1, text=training_text)
+    bpe = BPE(max_k=100, text=training_text)
 
     # ACT
     bpe.BPE_encoder()
@@ -44,7 +47,7 @@ def test_bpe_handles_unknown_characters():
     """
     # ARRANGE
     training_text = "aaaaa"
-    bpe = BPE(max_k=5, text=training_text)
+    bpe = BPE(max_k=50, text=training_text)
     bpe.BPE_encoder()
 
     test_string_with_unknowns = "abac"
@@ -55,3 +58,39 @@ def test_bpe_handles_unknown_characters():
     # ASSERT
     id_of_a = bpe.token_to_id["a"]
     assert encoded_ids == [id_of_a, -1, id_of_a, -1]
+
+
+def test_bpe_high_k_resource_usage():
+    """
+    Track system usage during BPE training (high merge count).
+    """
+    training_text = " ".join(["abc def ghi"] * 10000)
+    step_resources = {}
+
+    # Custom resource tracker function
+    def track_resource_usage(self, step: int):
+        ram_used = psutil.virtual_memory().used / 1024**2  # MB
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        total, used, _ = shutil.disk_usage(os.getcwd())
+        disk_used = used / 1024**3  # GB
+
+        step_resources[step] = {
+            "ram_MB": round(ram_used, 2),
+            "cpu_percent": round(cpu_percent, 2),
+            "disk_GB": round(disk_used, 2),
+        }
+
+        return 0  # Dummy duration for compatibility
+
+    # Pass your custom function to BPE
+    bpe = BPE(max_k=900, text=training_text, track_resource_fn=track_resource_usage)
+
+    bpe.BPE_encoder()
+
+    print("\n[BPE RESOURCE TRACKING]")
+    for step, data in step_resources.items():
+        print(
+            f"[STEP {step:03}] RAM: {data['ram_MB']} MB | CPU: {data['cpu_percent']}% | Disk: {data['disk_GB']} GB"
+        )
+
+    assert len(step_resources) > 0

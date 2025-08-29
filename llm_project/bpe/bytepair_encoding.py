@@ -6,6 +6,53 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+# For Debugging steps
+import time
+import psutil
+import platform
+from llm_project.utils.debugg_utils import Colors
+
+
+# For tracking resources during merge steps
+def print_resource_usage(self, step: int):
+    now = time.time()
+    step_duration = now - self._last_step_time
+    self._last_step_time = now
+
+    ram_used = psutil.virtual_memory().used / 1024**2
+    cpu_p = psutil.cpu_percent()
+
+    print(
+        f"""
+            [DEBUG]{f" BPE Merge step: {step:>10}m":>25}||{f"{'Step duration:':<8}{step_duration:>8.2f}s":>24}||
+            {f"        Ram used: {ram_used:>15.2f}MB":>32}||{f"{'CPU:':>1} {cpu_p:>17.2f}%":>24}||"""
+    )
+    current_os = platform.system().lower()
+
+    if current_os == "linux":
+        if os.path.exists("/kaggle/working"):
+            path = "/kaggle/working"
+        elif os.path.exists("/content"):
+            path = "/content"
+        else:
+            path = "/"
+        print(f"             Disk Usage ({path}): {psutil.disk_usage(path).percent}%")
+
+    elif current_os == "windows":
+        root_drive = os.getenv("SystemDrive", "C:") + "\\"
+        print(
+            f"             Disk Usage ({root_drive}): {psutil.disk_usage(root_drive).percent}%"
+        )
+
+    elif current_os == "darwin":
+        print(f"             Disk Usage (/): {psutil.disk_usage('/').percent}%")
+
+    else:
+        print(f"{Colors.WARNING}[WARN]{Colors.ENDC} Unknown OS, defaulting to '/'")
+        print(f"             Disk Usage (/): {psutil.disk_usage('/').percent}%")
+
+    return step_duration
+
 
 def get_vocab(text):
     vocab = defaultdict(int)
@@ -28,7 +75,12 @@ def normalize_text(text):
 
 
 class BPE:
-    def __init__(self, max_k, data_path=None, text=None):
+    def __init__(self, max_k, data_path=None, text=None, track_resource_fn=None):
+        # Step timer init for debugg
+        self.merge_time_dict = {}  # Tracks times per merge step
+        self._last_step_time = time.time()
+        self.track_resource_fn = track_resource_fn or print_resource_usage
+
         # text attributes
         self.datapath = data_path
 
@@ -48,6 +100,24 @@ class BPE:
         self.vocab_size_history = []
         self.vocab = {}
         self.merges = []
+
+    def plot_merge_times(self):
+        if not self.merge_time_dict:
+            print("No merge timings recorded.")
+            return
+
+        steps = list(self.merge_time_dict.keys())
+        durations = list(self.merge_time_dict.values())
+
+        plt.figure()
+        plt.plot(steps, durations, label="Step Duration (s)", color="blue")
+        plt.xlabel("Merge Step")
+        plt.ylabel("Time (seconds)")
+        plt.title("Time per Merge Step")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.legend()
+        plt.show()
 
     # Methods enc/dec/map
     def build_token_mappings(self):
@@ -110,28 +180,43 @@ class BPE:
         # Turn the text into a list of characters
         tokens = list(self.text)
         self.tokens = tokens.copy()
+
+        # Start a timer for training time
+        start_time = time.time()
+
         # Training loop over k
         for step in trange(self.max_k, desc="Training BPE", ncols=100):
             # New track for bpe merges
             if (step + 1) % 50 == 0 or step == 0:
                 print(f"[BPE] Merge step {step + 1}/{self.max_k}", flush=True)
-                sys.stdout.flush()
+                if self.track_resource_fn:
+                    # duration = print_resource_usage(self, step)
+                    duration = self.track_resource_fn(self, step)
+                    self.merge_time_dict[step] = duration
 
+                sys.stdout.flush()
                 frequencies = defaultdict(int)
+
             # Iteration over all the tokens in the text, we exclude the last one
             for i in range(len(tokens) - 1):
                 # A pair is defined by adjecent tokens in the text
                 pair = (tokens[i], tokens[i + 1])
                 # Update frequencies dictionary every time is encountered in the text
                 frequencies[pair] += 1
+
             # If the dictionary is empty we do not merge anymore
             if not frequencies:
-                print(f"No more pairs to merge at step {step}. Stopping early.")
+                print(
+                    f"{Colors.UNDERLINE}No more pairs to merge at step {step}{Colors.ENDC}. Stopping early."
+                )
                 break
+
             # Select the most frequent pair
             most_freq = max(frequencies, key=frequencies.get)
+
             # Merge the pair into a new token
             new_token = "".join(most_freq)
+
             # Append the merge at the merges list
             self.merges.append((most_freq, new_token))
 
@@ -159,6 +244,10 @@ class BPE:
             self.vocab_size_history.append(len(get_vocab(tokens)))
             # print(f"step {step}: merged {most_freq} in {new_token}")
 
+        # Retrieves training time
+        total_time = time.time() - start_time
+        print(f"Total BPE training time: {total_time:.2f} seconds")
+
         # Obtain the final vocabulary of the tokenized text
         initial_vocab = get_vocab(list(self.text))
         # Create a dictionary of all tokens created during merges
@@ -168,7 +257,7 @@ class BPE:
         full_vocab = {**initial_vocab, **merged_tokens_vocab}
         self.vocab = full_vocab
 
-        print("BPE training done")
+        print(f"BPE training {Colors.OKGREEN}[DONE]{Colors.ENDC}\n")
         self.build_token_mappings()
 
     def plot_vocabulary_growth(self):
@@ -324,6 +413,9 @@ if __name__ == "__main__":
     bpe.BPE_encoder()
     print("\nLoop completed, train text tokenized\n")
 
+    # To visualize slow downs
+    bpe.plot_merge_times()
+
     # Plot growth of vocabulary
     bpe.plot_vocabulary_growth()
 
@@ -346,4 +438,5 @@ if __name__ == "__main__":
 
     save_item(bpe.vocab, train_results_path, "train_final_vocab.pkl")
     save_item(bpe.vocab_size_history, train_results_path, "train_vocab_history.pkl")
+    save_item(bpe.merges, train_results_path, "train_bpe_merges.pkl")
     save_item(bpe.merges, train_results_path, "train_bpe_merges.pkl")

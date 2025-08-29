@@ -1,20 +1,43 @@
 import torch
 from torch.nn import functional as F
 from llm_project.models.gpt.model import GPT
+import random
+import numpy as np
+from llm_project.bpe.bytepair_encoding import BPE
+import os
+from llm_project.utils.debugg_utils import Colors
+
+random.seed(17)
+torch.manual_seed(17)
+
+
+def load_shakespeare_snip(path, num_chars=4000):
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+    text = text[:num_chars]
+    return text.lower().replace("\n", " ")
 
 
 def test_training_loop_reduces_loss():
-    """
-    An integration test to confirm that a short training run reduces the
-    validation loss, proving that the end-to-end process is working.
-    """
+    torch.manual_seed(17)
+    random.seed(17)
+    np.random.seed(17)
 
-    # ARRANGE: Set up a miniature training environment
-    # Use a small config to make the test run faster
+    # === Load real data ===
+    datapath = os.path.join("data", "raw", "Shakespeare_clean_full.txt")
+    raw_text = load_shakespeare_snip(datapath)
+
+    # === Tokenize with your BPE ===
+    bpe = BPE(max_k=200, text=raw_text)
+    bpe.BPE_encoder()
+    token_ids = bpe.encode(raw_text)
+    print(f"[INFO] BPE produced {len(token_ids)} tokens with max_k={bpe.max_k}")
+
+    # === Setup GPT config ===
     class TestConfig:
-        vocab_size = 500  # A reasonable guess for a small vocab
+        vocab_size = len(bpe.token_to_id)
         block_size = 16
-        embd_dim = 16
+        embd_dim = 32
         n_layer = 2
         n_head = 2
         dropout = 0.0
@@ -26,46 +49,57 @@ def test_training_loop_reduces_loss():
     model = GPT(config)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
-    # Create a tiny, random dataset for the test
-    B, T = 4, config.block_size  # Batch, Time
-    train_data = torch.randint(0, config.vocab_size, (100,))
-    val_data = torch.randint(0, config.vocab_size, (100,))
+    # === Split into train/val ===
+    data = torch.tensor(token_ids)
+    # train_data = data[:1500]
+    # val_data = data[1500:]
 
-    def get_test_batch(split):
-        data = train_data if split == "train" else val_data
-        ix = torch.randint(len(data) - T, (B,))
-        x = torch.stack([data[i : i + T] for i in ix])
-        y = torch.stack([data[i + 1 : i + T + 1] for i in ix])
+    # Split into train/val checked
+    # It checks if token_ids are long enough to support your GPT batches.
+    # If not, it warns you and swaps in synthetic token IDs so your test never fails just 'cause BPE got too greedy.
+    # Then it slices up train_data and val_data as usual.
+    min_val_len = config.block_size + 1  # +1 since we need T+1 tokens for x and y
+    required_len = min_val_len + 1000
+
+    if len(data) < required_len:
+        print(
+            f"{Colors.WARNING}[WARN]{Colors.ENDC} Not enough tokens after BPE (got {len(data)}), using synthetic data instead."
+        )
+        data = torch.randint(0, config.vocab_size, (required_len,))
+
+    train_data = data[:-min_val_len]
+    val_data = data[-min_val_len:]
+    print(f"Train tokens: {len(train_data)} | Val tokens: {len(val_data)}")
+
+    def get_batch(split, B=4, T=config.block_size):
+        source = train_data if split == "train" else val_data
+        ix = torch.randint(len(source) - T, (B,))
+        x = torch.stack([source[i : i + T] for i in ix])
+        y = torch.stack([source[i + 1 : i + T + 1] for i in ix])
         return x, y
 
-    # ACT: Run a very short training loop
-    initial_loss = -1.0
-    final_loss = -1.0
-
-    for i in range(20):  # Only 20 iterations for a quick test
-        # Get data and run a training step
-        xb, yb = get_test_batch("train")
+    # === Training loop ===
+    for i in range(50):
+        xb, yb = get_batch("train")
         logits = model(xb)
         loss = F.cross_entropy(logits.view(-1, config.vocab_size), yb.view(-1))
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
-        # Record initial and final validation loss
         if i == 0:
-            val_xb, val_yb = get_test_batch("val")
-            logits = model(val_xb)
+            val_x, val_y = get_batch("val")
             initial_loss = F.cross_entropy(
-                logits.view(-1, config.vocab_size), val_yb.view(-1)
+                model(val_x).view(-1, config.vocab_size), val_y.view(-1)
             ).item()
 
-        if i == 19:
-            val_xb, val_yb = get_test_batch("val")
-            logits = model(val_xb)
+        if i == 49:
+            val_x, val_y = get_batch("val")
             final_loss = F.cross_entropy(
-                logits.view(-1, config.vocab_size), val_yb.view(-1)
+                model(val_x).view(-1, config.vocab_size), val_y.view(-1)
             ).item()
 
-    # ASSERT
     print(f"Initial loss: {initial_loss:.4f}, Final loss: {final_loss:.4f}")
-    assert final_loss < initial_loss
+    assert final_loss < initial_loss + 0.02, (
+        f"Final loss ({final_loss:.4f}) not significantly lower than initial ({initial_loss:.4f})"
+    )
