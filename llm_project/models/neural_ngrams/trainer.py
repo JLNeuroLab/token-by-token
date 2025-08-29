@@ -196,7 +196,7 @@ class NeuralNgramTrainer:
         os.makedirs(ckpt_dir, exist_ok=True)
 
         # ---------------- BPE -----------------------
-        self.prepare_bpe(force_train=force_retrain, load_bpe_name=load_bpe_name)
+        self.prepare_bpe(load_bpe_name=load_bpe_name)
 
         if self.model is None:
             vocab_size = len(self.bpe.tokens)
@@ -229,8 +229,8 @@ class NeuralNgramTrainer:
                 try:
                     losses, val_losses = self.load_checkpoint(self.checkpoint_dir, load_ckpt_name)
                     # Stop immediately if no training data (generation-only mode)
-                    if len(self.train_text) == 0:
-                        return losses, val_losses
+                    return losses, val_losses
+                
                 except Exception as e:
                     print(f"Error loading checkpoint: {e}. Initializing a new model.")
             else:
@@ -350,7 +350,8 @@ class NeuralNgramTrainer:
 
         if self.bpe:
             generated_tokens = [self.bpe.id_to_token[i] for i in generated_ids]
-            return generated_ids, generated_tokens
+            generated_text = " ".join(generated_tokens).replace("_", "")
+            return generated_ids, generated_text
         
         return generated_ids
     
