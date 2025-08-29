@@ -1,3 +1,4 @@
+import os
 from llm_project.utils.file_manager import load_item
 
 def load_shakespeare(version ="raw"):
@@ -12,4 +13,7 @@ def load_shakespeare(version ="raw"):
 
     folder, fname = version_map[version]
 
-    return load_item(folder, fname)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    full_folder = os.path.join(project_root, folder)
+
+    return load_item(full_folder, fname)

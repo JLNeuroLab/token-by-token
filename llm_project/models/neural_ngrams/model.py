@@ -2,6 +2,7 @@ import numpy as np
 import os
 import sys
 import matplotlib.pyplot as plt
+from llm_project.utils.dataloader import load_shakespeare
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
@@ -35,13 +36,11 @@ def get_batch(data_ids, block_size, batch_size):
 
 class NeuralNgram:
 
-    def __init__(self, n, vocab_size, embedding_dim=32, batch_size=32, block_size=4, seed=35):
+    def __init__(self, n, vocab_size, embedding_dim=32, seed=35):
         np.random.seed(seed)
         self.n = n
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
-        self.batch_size = batch_size
-        self.block_size = block_size
         # Initialize embedding matrix
         self.embeddings = np.random.randn(vocab_size, embedding_dim) * 0.01 # (vocab_size, embedding_dim)
         # Initialize weights and biases
@@ -137,138 +136,26 @@ class NeuralNgram:
         # update embeddings (vectorized, safer)
         np.add.at(self.embeddings, X_batch, -lr * dE)
 
-    # ------------- CHECKPOINTS ------------------
-    def save_checkpoint(self, folder, name, losses=None, val_losses=None):
+    # ------------- MODEL STATES ------------------
+    def state_dict(self):
         """
-        Uses save_item for saving the  parameters of the model
-
-        Args:
-            folder (str): folder where checkpoint is saved
-            name (str): checkpoint filename
+        Returns model parameters as a dictionary
         """
-        print("saving checkpoint")
-        state = {
+        return {
             "embeddings": self.embeddings,
             "W": self.W,
-            "b": self.b,
-            "losses": losses,
-            "val_losses": val_losses
+            "b": self.b
         }
-        save_item(state, folder=folder, name=name, text_version=False)
 
-    def load_checkpoint(self, folder, name, base_dir=None):
+    def load_state_dict(self, state):
         """
-        Load a model checkpoint previously saved with save_checkpoint.
-
-        Args:
-            folder (str): folder where checkpoint is saved
-            name (str): checkpoint filename
-            base_dir (str|None): optional base directory
-
-        Returns:
-            None. Updates model weights in place.
+        Loads parameters from dictionary
         """
-        checkpoint = load_item(folder, name, base_dir=base_dir)
-        
-        if not all(k in checkpoint for k in ("embeddings", "W", "b")):
-            raise ValueError(f"Checkpoint {name} does not contain all required keys.")
-        
-        self.embeddings = checkpoint["embeddings"]
-        self.W = checkpoint["W"]
-        self.b = checkpoint["b"]
-        losses = checkpoint.get("losses", [])
-        val_losses = checkpoint.get("val_losses", [])   
-        print(f"Checkpoint loaded: {os.path.join(folder, name)}")
-        return losses, val_losses
+        self.embeddings = state["embeddings"]
+        self.W = state["W"]
+        self.b = state["b"]
 
-    # ------------- TRAINING --------------
-    def fit(self, data_ids,
-            epochs=3,
-            lr=0.01,
-            print_every=100,
-            val_ids=None,
-            checkpoint_dir = "checkpoints",
-            max_checkpoints = 3,
-            patience = 3,
-            load_ckpt_name = None,
-            force_train = False
-            ):
-        """
-        Trains the model on the given data using mini-batch SGD.
-
-        Args:
-            data_ids (list[int]): list of token ids for training.
-            epochs (int): number of passes over the training dataset.
-            batch_size (int): number of sequences per batch.
-            block_size (int): length of each input sequence.
-            learning_rate (float): learning rate for SGD updates.
-            val_data_ids (list[int]|None): optional validation data for early stopping.
-            patience (int): number of epochs to wait before stopping if validation loss does not improve.
-            max_checkpoints (int): maximum number of model checkpoints to save.
-
-        Returns:
-            None. Model weights are updated in place. Saves checkpoints to disk if enabled.
-        """
-        os.makedirs(checkpoint_dir, exist_ok=True)
-
-        if load_ckpt_name is not None and not force_train:
-            checkpoint_path = os.path.join(checkpoint_dir, load_ckpt_name)
-            if os.path.exists(checkpoint_path):
-                self.load_checkpoint(checkpoint_dir, load_ckpt_name)
-                print("Checkpoint loaded, skipping training.")
-                return [], []
-
-        losses, val_losses = [], []
-        best_val_loss = float("inf")
-        step = 0
-        patience_counter = 0
-        checkpoints = []
-        #---------- TRAINING-----------
-        for epoch in range(epochs):
-
-            n_batches = len(data_ids) // self.batch_size
-
-            for _ in range(n_batches):
-            
-                X_batch, y_batch = get_batch(data_ids, block_size=self.block_size, batch_size=self.batch_size)
-                logits = self.forward(X_batch)
-                loss, probs = self.cross_entropy_loss(logits, y_batch)
-                self.backward(X_batch, y_batch, probs, lr=lr)
-                losses.append(loss)
-
-                if step % print_every == 0:
-                    print(f"epoch {epoch + 1}/{epochs}, step {step}, loss: {loss:.4f}")
-                step += 1
-
-            # -------- VALIDATION --------  
-            if val_ids is not None:
-                X_val, y_val = get_batch(val_ids, block_size=self.block_size, batch_size=self.batch_size)
-                val_logits = self.forward(X_val)
-                val_loss, _ = self.cross_entropy_loss(val_logits, y_val)
-                val_losses.append(val_loss)
-
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    patience_counter = 0
-                    ckpt_path = f"val={val_loss:.4f}_epoch={epoch+1}.pkl"
-                    self.save_checkpoint(checkpoint_dir, ckpt_path, losses=losses, val_losses=val_losses)
-                    checkpoints.append((val_loss, ckpt_path))
-                    checkpoints.sort(key=lambda x: x[0])
-
-                    if len(checkpoints) > max_checkpoints:
-                        _, worst_ckpt = checkpoints.pop(-1)
-                        os.remove(os.path.join(checkpoint_dir, worst_ckpt))
-                    print(f"saved checkpoints in {ckpt_path}")
-                
-                else:
-                    patience_counter += 1
-                    print(f"no improvement (patience {patience_counter}/{patience})")
-
-                if patience_counter >= patience:
-                    print(f"early stopping triggered")
-                    return losses, val_losses
-
-        return losses, val_losses
+    
     #  ---------------- PLOTTING LOSS CURVE -------------------
     def plot_loss(self, train_losses, val_losses=None):
         
@@ -312,7 +199,9 @@ class NeuralNgram:
 
             exps = np.exp(logits)
             probs = exps / exps.sum()
+            print("DEBUG generate:", len(probs), self.vocab_size)
 
+            assert len(probs) == self.vocab_size, f"{len(probs)} vs {self.vocab_size}"
             if stochastic:
                 next_id = int(np.random.choice(self.vocab_size, p=probs))
             else:
@@ -370,14 +259,12 @@ if __name__ == "__main__":
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # ---------------- LOAD AND NORMALIZE TEXT -----------------
-    bpe = BPE(data_path=train_path, max_k=max_k)
-    bpe.train_text = bpe.load_and_normalize()
-    bpe.test_text = bpe.load_and_normalize()
+    bpe = BPE(datapath=train_path, max_k=max_k)
+    t_train = bpe.load_and_normalize()
+    bpe.text = t_train[:10000]
 
-    t_train, t_valid = bpe.train_text, bpe.test_text
-    # (Optional) truncate for faster testing
-    t_train = t_train[:10000]
-    t_valid = t_valid[:1000]
+    t_valid = load_shakespeare("validation")
+    bpe.test_text = t_valid[:1000]
     print(f"Train size (chars): {len(t_train)}, Test size (chars): {len(t_valid)}")
 
     # ---------------- TRAIN BPE -----------------
@@ -392,7 +279,7 @@ if __name__ == "__main__":
 
     # Encode training and validation text
     train_ids = [token2id[tok] for tok in bpe.tokens if tok in token2id]
-    test_tokens = bpe.BPE_segmenter(t_valid)
+    test_tokens = bpe.BPE_segmenter(bpe.test_text)
     val_ids = [token2id[tok] for tok in test_tokens if tok in token2id]
     print(f"DEBUG: Length of train_ids: {len(train_ids)}, Length of val_ids: {len(val_ids)}")
     print(f"DEBUG: Sample of train_ids: {train_ids[:20]}")
@@ -411,11 +298,15 @@ if __name__ == "__main__":
         print_every=50,
         max_checkpoints=3,
         patience=3,
-        load_ckpt_name="val=3.4184_epoch=2.pkl",
-        force_train=False
+        load_ckpt_name=None,
+        force_train=True
     )
     print("DEBUG: Training finished")
-    losses, val_losses = model.load_checkpoint(checkpoint_dir, "val=3.4184_epoch=2.pkl")
+    import glob
+    ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, "*.pkl")))
+    if ckpt_files:
+        last_ckpt = os.path.basename(ckpt_files[-1])
+        losses, val_losses = model.load_checkpoint(checkpoint_dir, last_ckpt)
     model.plot_loss(losses, val_losses)
     print("Training completed!")
 

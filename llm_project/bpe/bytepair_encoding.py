@@ -82,9 +82,7 @@ class BPE:
         self.track_resource_fn = track_resource_fn or print_resource_usage
 
         # text attributes
-        self.datapath = data_path
-
-        self.datapath = data_path
+        self.datapath = datapath
         self.text = text
         self.train_text = None
         self.test_text = None
@@ -395,11 +393,10 @@ if __name__ == "__main__":
     # set k value
     max_k = 2000
     # Initialize tokenizer
-    bpe = BPE(datapath, max_k)
+    bpe = BPE(max_k=max_k, datapath=datapath)
 
     # load and normalize text
     norm_text = bpe.load_and_normalize()
-    print(norm_text)
     # Split train/test
     test_text, train_text = bpe.split_train_test()
     bpe.train_text = train_text[:10000]

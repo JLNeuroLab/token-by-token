@@ -32,7 +32,7 @@ def main():
         text = f.read()
 
     print("Training tokenizer...")
-    tokenizer = BPE(data_path=None, text=text, max_k=2000)  # Pass text directly
+    tokenizer = BPE(datapath=None, text=text, max_k=2000)  # Pass text directly
 
     project_root = os.getcwd()
     bpe_results_folder = os.path.join("experiments", "bpe_results", "train_results")
@@ -42,10 +42,10 @@ def main():
     try:
         # Try to load the pre-saved merges and vocab
         tokenizer.merges = load_item(
-            folder=bpe_results_folder, name=merges_file, base_dir=project_root
+            folder_path=bpe_results_folder, name=merges_file, base_dir=project_root
         )
         tokenizer.vocab = load_item(
-            folder=bpe_results_folder, name=vocab_file, base_dir=project_root
+            folder_path=bpe_results_folder, name=vocab_file, base_dir=project_root
         )
         print(f">>Loaded pre-trained tokenizer from {bpe_results_folder}")
         tokenizer.build_token_mappings()
