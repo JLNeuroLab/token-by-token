@@ -11,7 +11,7 @@ from llm_project.models.gpt.generator import Generator
 # -------------- Imports for ngram --------------------
 from llm_project.models.ngrams.trainer import NGramTrainer
 # --------------- Imports for nerural ngram ---------------
-from llm_project.models.neural_ngrams.trainer import NeuralNgramTrainer, NeuralNgram, normalize_text
+from llm_project.models.neural_ngrams.trainer import NeuralNgramTrainer
 
 def run_training(args):
     print("[INFO] Running training with arguments:", vars(args))
@@ -49,13 +49,13 @@ def run_training(args):
             max_k=args.max_k,
             batch_size=args.batch_size,
             block_size=args.block_size,
-            print_every=args.print_every,
             embedding_dim=args.embedding_dim,
         )
     
         nngram_trainer.fit(epochs=args.epochs,
                        lr=args.lr,
-                        patience=args.patience)
+                        patience=args.patience,
+                        force_retrain=args.force_retrain)
     else:
         raise ValueError(f"Unknown model: {args.model}")
     
@@ -101,7 +101,7 @@ def run_generation(args):
             embedding_dim=args.embedding_dim,
             autoload=True
         )
-        nngram_trainer.prepare_bpe(force_train=False)
+        nngram_trainer.prepare_bpe(force_retrain=False)
 
         generated_ids, generated_tokens = nngram_trainer.generate(
             prompt=args.prompt,
@@ -129,7 +129,7 @@ def main():
     Train examples
     python main.py train --model gpt --max_iters 5000 --dropout 0.1 --embd_dim 128 --n_layer 4
     python main.py train --model ngram --n 3 --train_size 10000 --valid_size 1000 --tune_lambdas --force_retrain
-    python main.py train --model neural --n 3 --epochs 10 --batch_size 32 --block_size 8 --embedding_dim 16
+    python main.py train --model neural --n 3 --epochs 10 --batch_size 32 --block_size 8 --embedding_dim 16 --force_retrain
 
     Generate examples
     python main.py generate --model gpt  --prompt "To be or not to be" --max_new_tokens 100

@@ -97,12 +97,12 @@ class NeuralNgramTrainer:
         print(f"Checkpoint loaded: {os.path.join(folder, name)}")
         return losses, val_losses
         
-    def prepare_bpe(self, force_train=False, load_bpe_name=None):
+    def prepare_bpe(self, force_retrain=False, load_bpe_name=None):
         bpe_dir = os.path.join(self.root, "experiments", "bpe_results", "train_results")
         os.makedirs(bpe_dir, exist_ok=True)
         bpe_file = load_bpe_name or os.path.join(bpe_dir, f"BPE_merges_k{self.max_k}.pkl")
 
-        if os.path.exists(bpe_file) and not force_train:
+        if os.path.exists(bpe_file) and not force_retrain:
             print(f"Loading existing BPE from {bpe_file}...")
             bpe_data = load_item(bpe_dir, os.path.basename(bpe_file))
             self.bpe = BPE(max_k=bpe_data["max_k"], text=" ".join(self.train_text))
@@ -177,7 +177,7 @@ class NeuralNgramTrainer:
             block_size=None,
             epochs=3,
             lr=0.01,
-            force_train=False,
+            force_retrain=False,
             load_ckpt_name=None,
             load_bpe_name=None,
             patience=3,
@@ -196,7 +196,7 @@ class NeuralNgramTrainer:
         os.makedirs(ckpt_dir, exist_ok=True)
 
         # ---------------- BPE -----------------------
-        self.prepare_bpe(force_train=force_train, load_bpe_name=load_bpe_name)
+        self.prepare_bpe(force_train=force_retrain, load_bpe_name=load_bpe_name)
 
         if self.model is None:
             vocab_size = len(self.bpe.tokens)
@@ -220,7 +220,7 @@ class NeuralNgramTrainer:
         self.val_ids = text_to_ids(self.valid_text) if self.valid_text else None
 
         # ------------------- Automatic checkpoint loading -------------------
-        if self.autoload and not force_train:
+        if self.autoload and not force_retrain:
             ckpts = glob.glob(os.path.join(self.checkpoint_dir, "*.pkl"))
             if ckpts:
                 ckpts = sorted(ckpts, key=lambda x: os.path.getmtime(x), reverse=True)
