@@ -3,7 +3,7 @@ import pickle
 import matplotlib.pyplot as plt
 
 # ------------------------Method to automatically save results------------------------------
-def save_item(item, folder : str , name : str, text_version=True, base_dir = None):
+def save_item(item, folder_path : str , name : str, text_version=True, base_dir = None):
     """
     Save different type of files and creates an according folder if it does not exist
     
@@ -23,22 +23,22 @@ def save_item(item, folder : str , name : str, text_version=True, base_dir = Non
                     "..")
                 )
 
-    folder = os.path.join(base_dir, folder)
-    os.makedirs(folder, exist_ok=True)
-    output_file = os.path.join(folder, name)
+    folder_path = os.path.join(base_dir, folder_path)
+    os.makedirs(folder_path, exist_ok=True)
+    output_file = os.path.join(folder_path, name)
     if isinstance(item, str):
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(item)
-        print(f"text normalized and saved: {os.path.basename(folder)}/{name}")
+        print(f"text normalized and saved: {os.path.basename(folder_path)}/{name}")
 
     elif isinstance(item, plt.Figure):
         item.savefig(output_file)
-        print(f"plot saved in: {os.path.basename(folder)}/{name}")
+        print(f"plot saved in: {os.path.basename(folder_path)}/{name}")
 
     elif isinstance(item, (list, tuple, set, dict)):
         with open(output_file, "wb") as f:
             pickle.dump(item, f)
-        print(f"data saved in: {os.path.basename(folder)}/{name}")
+        print(f"data saved in: {os.path.basename(folder_path)}/{name}")
 
         if text_version is True:
             text_file = os.path.splitext(output_file)[0] + ".txt"
@@ -56,12 +56,12 @@ def save_item(item, folder : str , name : str, text_version=True, base_dir = Non
                         else:
                             f.write(str(elem) + "\n")
                             
-            print(f"data saved in readable text: {os.path.basename(folder)}/{os.path.basename(text_file)}")
+            print(f"data saved in readable text: {os.path.basename(folder_path)}/{os.path.basename(text_file)}")
     else:
         raise TypeError(f"Unsupported type: {type(item)}")
     
     
-def load_item(folder: str, name: str, base_dir=None):
+def load_item(folder_path: str, name: str, base_dir=None):
     """
     Load an item previously saved with save_item.
 
@@ -82,10 +82,10 @@ def load_item(folder: str, name: str, base_dir=None):
             )
         )
 
-    path = os.path.join(base_dir, folder, name)
+    path = os.path.join(base_dir, folder_path, name)
     
     if not os.path.exists(path):
-        raise FileNotFoundError(f"{name} not found in folder {folder}")
+        raise FileNotFoundError(f"{name} not found in folder {folder_path}")
 
     ext = os.path.splitext(name)[1].lower()
     

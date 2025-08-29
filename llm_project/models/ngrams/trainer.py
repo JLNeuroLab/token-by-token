@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 from llm_project.utils.file_manager import save_item, load_item
 from llm_project.models.ngrams.model import NGram
 from llm_project.bpe.bytepair_encoding import BPE, normalize_text
@@ -52,6 +53,7 @@ class NGramTrainer:
             self.bpe = BPE(max_k=max_k, text=None)
             self.bpe.merges = self.merges
             self.bpe.tokens = self.model.tokens
+            self.tune_lambdas()
             return self.model, self.merges
                 
         else:
@@ -137,7 +139,32 @@ class NGramTrainer:
         perplexity = np.exp(-avg_log_prob)
 
         return perplexity
+    
+    def plot_lambda_perplexities(self, results, folder, filename="lambda_perplexity.png"):
+        """
+        results: list of (label, perplexity)
+        """
+        labels, perplexities = zip(*results)
+        x = np.arange(len(labels))
 
+        fig, ax = plt.subplots(figsize=(8, 6))
+        bars = ax.bar(x, perplexities, color="skyblue", edgecolor="black")
+
+        # aggiungi valori sopra le barre
+        for bar, val in zip(bars, perplexities):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                    f"{val:.2f}", ha='center', va='bottom', fontsize=10)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=30, ha="right")
+        ax.set_ylabel("Perplexity")
+        ax.set_title("Confronto λ-sets vs Perplexity")
+        ax.grid(axis="y", linestyle="--", alpha=0.7)
+
+        save_item(fig, folder, filename, text_version=False)
+        plt.close(fig)
+
+    
     def tune_lambdas(self):
         """
         Finds the optimal lambda weights for an n-gram model by minimizing
@@ -168,6 +195,7 @@ class NGramTrainer:
         best_model_probs = None
         lowest_perplexity = float("inf")
 
+        results = []
         for label, current_lambdas in lambda_candidates.items():
             print(f"\nTesting {label}: {current_lambdas}...")
 
@@ -177,6 +205,7 @@ class NGramTrainer:
             # Evaluate the model on the validation tokens
             perplexity = self.compute_perplexity(validation_tokens, label=label)
             print(f"Perplexity on validation set: {perplexity:.4f}")
+            results.append((label, perplexity))
 
             # Check if this is the best result so far
             if perplexity < lowest_perplexity:
@@ -191,6 +220,8 @@ class NGramTrainer:
         print("\n--- Tuning Complete ---")
         print(f"The lowest perplexity achieved was: {lowest_perplexity:.4f}")
         print(f"The best lambda weights are: {best_lambdas}")
+        plot_folder = os.path.join(self.root, "experiments", "saved_models", "ngram")
+        self.plot_lambda_perplexities(results, folder=plot_folder)
 
         return best_lambdas, lowest_perplexity, best_model_probs
 
@@ -208,7 +239,7 @@ if __name__ == "__main__":
     trainer = NGramTrainer(model=None, tokens=None, n=n, max_k=max_k)
 
     # --- Train BPE and NGram model (train() gestisce tutto) ---
-    model, merges = trainer.train(tune_lambdas=True)
+    model, merges = trainer.train(tune_lambdas=True, force_retrain=False)
     print("Training completed.")
 
     # --- Generate text ---

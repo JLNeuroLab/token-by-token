@@ -73,7 +73,7 @@ class NeuralNgramTrainer:
             "losses": losses,
             "val_losses": val_losses
         }
-        save_item(state, folder=folder, name=name, text_version=False)
+        save_item(state, folder_path=folder, name=name, text_version=False)
 
     def load_checkpoint(self, folder, name, base_dir=None):
         """
@@ -173,23 +173,62 @@ class NeuralNgramTrainer:
         
         return generated_ids
 
-    def plot_loss(self, train_losses, val_losses=None):
-        
-        plt.figure(figsize=(8, 6))
-        plt.plot(train_losses, label="Train loss", color="blue")
+    #def plot_loss(self, train_losses, val_losses=None, folder=None, filename="loss_curve.png"):
+        """
+        Plotta e salva i grafici di training/validation loss usando save_item
+        """
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(train_losses, label="Train loss", color="blue")
 
         if val_losses:
             steps_per_epoch = len(train_losses) // len(val_losses)
             x_vals = [i * steps_per_epoch for i in range(len(val_losses))]
+            ax.plot(x_vals, val_losses, label="Validation loss", color="red")
 
-            plt.plot(x_vals, val_losses, label="Validation loss", color="red")
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Loss")
+        ax.set_title("Training and Validation Loss")
+        ax.legend()
+        ax.grid(True, linestyle="--", alpha=0.6)
 
-        plt.xlabel("Step")
-        plt.ylabel("Loss")
-        plt.title("Training and Validation Loss")
-        plt.legend()
-        plt.grid(True, linestyle="--", alpha=0.6)
-        plt.show()
+        # Usa save_item per salvare
+        folder = folder or self.checkpoint_dir
+        save_item(fig, folder, filename, text_version=False)
+
+        plt.close(fig)
+
+    def plot_perplexity(self, train_ids=None, val_ids=None, folder=None, filename="perplexity_curve.png"):
+        """
+        Plots the perplexity on training and validation sets.
+
+        Args:
+            train_ids (list[int]): token IDs for training data
+            val_ids (list[int]): token IDs for validation data
+        """
+        train_ids = train_ids or self.train_ids
+        val_ids = val_ids or self.val_ids
+
+        # Compute perplexity in chunks to reduce computation time
+        train_ppl = [self.compute_perplexity(train_ids[i:i+self.block_size*10]) 
+                    for i in range(0, len(train_ids), self.block_size*10)]
+        
+        val_ppl = [self.compute_perplexity(val_ids[i:i+self.block_size*10]) 
+                for i in range(0, len(val_ids), self.block_size*10)] if val_ids else []
+
+        fig, ax = plt.subplots(figsize=(8,6))
+        ax.plot(train_ppl, label="Train Perplexity", color="blue")
+        if val_ppl:
+            ax.plot(val_ppl, label="Validation Perplexity", color="red")
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Perplexity")
+        ax.set_title("Perplexity over Training")
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend()
+
+        folder = folder or self.checkpoint_dir
+        save_item(fig, folder, filename, text_version=False)
+        plt.close(fig)
+
     
     def compute_perplexity(self, data_ids):
         """
@@ -257,8 +296,9 @@ class NeuralNgramTrainer:
         if load_ckpt_name is not None and not force_train:
             checkpoint_path = os.path.join(self.checkpoint_dir, load_ckpt_name)
             if os.path.exists(checkpoint_path):
-                self.load_checkpoint(self.checkpoint_dir, load_ckpt_name)
+                losses, val_losses = self.load_checkpoint(self.checkpoint_dir, load_ckpt_name)
                 print(f"Checkpoint {load_ckpt_name} loaded, skipping training.")
+                self.plot_loss(train_losses=losses, val_losses=val_losses)
                 return [], []
 
         # ---------------- TRAINING LOOP -------------------
@@ -308,7 +348,9 @@ class NeuralNgramTrainer:
                 if patience_counter >= patience:
                     print("Early stopping triggered")
                     return losses, val_losses
-
+        # plotting and saving loss function plot
+        #self.plot_loss(train_losses=losses, val_losses=val_losses)
+        self.plot_perplexity()
         return losses, val_losses
 
     
