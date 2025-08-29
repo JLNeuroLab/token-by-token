@@ -9,7 +9,7 @@ from  llm_project.bpe.bytepair_encoding import normalize_text, BPE
 class NeuralNgramTrainer:
 
 
-    def __init__(self, model, n, train_text, valid_text, max_k, root=None, checkpoint_dir="checkpoints", print_every=100, batch_size=32, block_size=4, embedding_dim=16):
+    def __init__(self, model, n, train_text, valid_text, max_k, root=None, checkpoint_dir="checkpoints", print_every=100, batch_size=32, block_size=4, embedding_dim=16, autoload=True):
         self.model = model
         self.n = n
         self.train_text = train_text
@@ -30,6 +30,7 @@ class NeuralNgramTrainer:
         self.merges = None
         self.train_ids = None
         self.val_ids = None
+        self.autoload = autoload
 
 
     def get_batch(self, data_ids):
@@ -129,74 +130,6 @@ class NeuralNgramTrainer:
         self.merges = self.bpe.merges
         print(f"BPE ready with {len(self.bpe.tokens)} tokens.")
 
-    def generate(self,
-                start_ids, 
-                id2token=None, 
-                max_new_tokens=20, 
-                stochastic=True,
-                stop_ids=None,
-                stop_words=None):
-
-        generated_ids = list(start_ids.copy())
-        
-        stop_ids = stop_ids or set()
-        stop_words = stop_words or set()
-        vocab_size = self.model.embeddings.shape[0]
-
-        for _ in range(max_new_tokens):
-            context = generated_ids[-self.block_size:]
-            X = np.array(context, dtype=np.int64)[None, :]
-            # generate logits
-            logits = self.model.forward(X)[0, -1] # Pick the last token of the first and only example
-
-            # Numerical stability
-            logits = (logits - np.max(logits))
-
-            exps = np.exp(logits)
-            probs = exps / exps.sum()
-            assert len(probs) == vocab_size, f"{len(probs)} vs {vocab_size}"
-            if stochastic:
-                next_id = int(np.random.choice(vocab_size, p=probs))
-            else:
-                next_id = int(np.argmax(probs))
-            
-            generated_ids.append(next_id)
-
-            if next_id in stop_ids:
-                break
-            if id2token is not None and id2token[next_id] in stop_words:
-                break
-
-        if id2token is not None:
-            generated_tokens = [id2token[i] for i in generated_ids]
-            return generated_ids, generated_tokens
-        
-        return generated_ids
-
-    #def plot_loss(self, train_losses, val_losses=None, folder=None, filename="loss_curve.png"):
-        """
-        Plotta e salva i grafici di training/validation loss usando save_item
-        """
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(train_losses, label="Train loss", color="blue")
-
-        if val_losses:
-            steps_per_epoch = len(train_losses) // len(val_losses)
-            x_vals = [i * steps_per_epoch for i in range(len(val_losses))]
-            ax.plot(x_vals, val_losses, label="Validation loss", color="red")
-
-        ax.set_xlabel("Step")
-        ax.set_ylabel("Loss")
-        ax.set_title("Training and Validation Loss")
-        ax.legend()
-        ax.grid(True, linestyle="--", alpha=0.6)
-
-        # Usa save_item per salvare
-        folder = folder or self.checkpoint_dir
-        save_item(fig, folder, filename, text_version=False)
-
-        plt.close(fig)
-
     def plot_perplexity(self, train_ids=None, val_ids=None, folder=None, filename="perplexity_curve.png"):
         """
         Plots the perplexity on training and validation sets.
@@ -286,20 +219,23 @@ class NeuralNgramTrainer:
         self.train_ids = text_to_ids(self.train_text)
         self.val_ids = text_to_ids(self.valid_text) if self.valid_text else None
 
-        # ---------------- Load checkpoint -------------------
-        if load_ckpt_name is None and not force_train:
+        # ------------------- Automatic checkpoint loading -------------------
+        if self.autoload and not force_train:
             ckpts = glob.glob(os.path.join(self.checkpoint_dir, "*.pkl"))
             if ckpts:
                 ckpts = sorted(ckpts, key=lambda x: os.path.getmtime(x), reverse=True)
                 load_ckpt_name = os.path.basename(ckpts[0])
+                print(f"Latest checkpoint found: {load_ckpt_name}, loading automatically.")
+                try:
+                    losses, val_losses = self.load_checkpoint(self.checkpoint_dir, load_ckpt_name)
+                    # Stop immediately if no training data (generation-only mode)
+                    if len(self.train_text) == 0:
+                        return losses, val_losses
+                except Exception as e:
+                    print(f"Error loading checkpoint: {e}. Initializing a new model.")
+            else:
+                print(f"No checkpoints found in {self.checkpoint_dir}. Initializing a new model.")
 
-        if load_ckpt_name is not None and not force_train:
-            checkpoint_path = os.path.join(self.checkpoint_dir, load_ckpt_name)
-            if os.path.exists(checkpoint_path):
-                losses, val_losses = self.load_checkpoint(self.checkpoint_dir, load_ckpt_name)
-                print(f"Checkpoint {load_ckpt_name} loaded, skipping training.")
-                self.plot_loss(train_losses=losses, val_losses=val_losses)
-                return [], []
 
         # ---------------- TRAINING LOOP -------------------
         losses, val_losses = [], []
@@ -353,6 +289,71 @@ class NeuralNgramTrainer:
         self.plot_perplexity()
         return losses, val_losses
 
+    def ensure_model_initialized(self):
+        if self.model is None:
+            vocab_size = len(self.bpe.tokens)
+            self.model = NeuralNgram(
+                n=self.n,
+                vocab_size=vocab_size,
+                embedding_dim=self.embedding_dim
+            )
+
+    def generate(self,
+                start_ids=None,
+                prompt=None, 
+                id2token=None, 
+                max_new_tokens=20, 
+                stochastic=True,
+                stop_ids=None,
+                stop_words=None):
+        
+        self.ensure_model_initialized()
+
+        if start_ids is None:
+            if prompt is None:
+                raise ValueError("Devi fornire almeno 'prompt' o 'start_ids'")
+            if self.bpe is None:
+                raise ValueError("BPE non inizializzato. Esegui prepare_bpe() prima.")
+            # Converti prompt in start_ids
+            start_tokens = self.bpe.BPE_segmenter(normalize_text(prompt))
+            start_ids = [self.bpe.token_to_id[tok] for tok in start_tokens if tok in self.bpe.token_to_id]
+
+        generated_ids = list(start_ids.copy())
+        
+        stop_ids = stop_ids or set()
+        stop_words = stop_words or set()
+        vocab_size = self.model.embeddings.shape[0]
+
+        for _ in range(max_new_tokens):
+            context = generated_ids[-self.block_size:]
+            X = np.array(context, dtype=np.int64)[None, :]
+            # generate logits
+            logits = self.model.forward(X)[0, -1] # Pick the last token of the first and only example
+
+            # Numerical stability
+            logits = (logits - np.max(logits))
+
+            exps = np.exp(logits)
+            probs = exps / exps.sum()
+            assert len(probs) == vocab_size, f"{len(probs)} vs {vocab_size}"
+            if stochastic:
+                next_id = int(np.random.choice(vocab_size, p=probs))
+            else:
+                next_id = int(np.argmax(probs))
+            
+            generated_ids.append(next_id)
+
+            if next_id in stop_ids:
+                break
+            if id2token is not None and id2token[next_id] in stop_words:
+                break
+
+        if self.bpe:
+            generated_tokens = [self.bpe.id_to_token[i] for i in generated_ids]
+            return generated_ids, generated_tokens
+        
+        return generated_ids
+    
     
 if __name__ == "__main__":
     # --- Load dataset ---

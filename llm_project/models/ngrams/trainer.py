@@ -50,7 +50,7 @@ class NGramTrainer:
 
             # --- Load BPE merges and recreate BPE instance ---
             self.merges = load_item(model_dir, merges_fname)
-            self.bpe = BPE(max_k=max_k, text=None)
+            self.bpe = BPE(max_k=self.max_k, text=None)
             self.bpe.merges = self.merges
             self.bpe.tokens = self.model.tokens
             self.tune_lambdas()
