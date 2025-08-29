@@ -27,8 +27,8 @@ def main():
     device = torch.device(device)
 
     # Data Loading and Preparation
-    data_path = os.path.join("data", "raw", "Shakespeare_clean_full.txt")
-    with open(data_path, "r", encoding="utf-8") as f:
+    datapath = os.path.join("data", "raw", "Shakespeare_clean_full.txt")
+    with open(datapath, "r", encoding="utf-8") as f:
         text = f.read()
 
     print("Training tokenizer...")
