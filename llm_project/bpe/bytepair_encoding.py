@@ -82,7 +82,7 @@ class BPE:
         self.track_resource_fn = track_resource_fn or print_resource_usage
 
         # text attributes
-        self.datapath = datapath
+        self.datapath = data_path
         self.text = text
         self.train_text = None
         self.test_text = None
