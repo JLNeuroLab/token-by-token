@@ -33,6 +33,7 @@ class NGramTrainer:
         merges_fname = f"BPE_merges_k{self.max_k}.pkl"
 
         model_dir = os.path.join(self.root, "experiments", "saved_models", "ngram")
+        merges_dir = os.path.join(self.root, "experiments", "saved_models", "ngram")
         os.makedirs(model_dir, exist_ok=True)
 
         model_path = os.path.join(model_dir, model_fname)
@@ -56,19 +57,18 @@ class NGramTrainer:
 
                 # --- Load BPE merges and recreate BPE instance ---
                 print(f"--- Loading pre-trained tokenizer from {merges_path} ---")
-                self.merges = load_item(model_dir, merges_fname)
+                self.merges = load_item(merges_dir, merges_fname)
                 self.bpe = BPE(max_k=self.max_k, text=None)
                 self.bpe.merges = self.merges
                 self.bpe.tokens = self.model.tokens
 
-                self.tune_lambdas()
                 return self.model, self.merges
                 
             elif bpe_exists and not model_exists:
                 print("Tokenizer found, training N-gram model")
                 # --- Load BPE merges and recreate BPE instance ---
                 print(f"--- Loading pre-trained tokenizer from {merges_path} ---")
-                self.merges = load_item(model_dir, merges_fname)
+                self.merges = load_item(merges_dir, merges_fname)
                 self.tokens = load_item(model_dir, "bpe_tokens.txt")
                 self.bpe = BPE(max_k=self.max_k, text=None)
                 
@@ -82,9 +82,18 @@ class NGramTrainer:
                 print("N-gram model training completed")
             
                 if tune_lambdas:
-                    best_lambdas, _, _ = self.tune_lambdas()
-                    self.best_lambdas = best_lambdas
-                    self.model.lambdas = best_lambdas
+                    # --- Check if best lambdas are available from saved model ---
+                    lambdas_path = os.path.join(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
+                    if os.path.exists(lambdas_path):
+                        print(f"--- Loading best lambdas from {lambdas_path} ---")
+                        self.model.lambdas = load_item(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
+                        self.model.interpolated_probs = self.model.interpolate_probs_with_laplace({"best": self.model.lambdas})
+                    else:
+                        # --- Tune lambdas only if they're not available ---
+                        print("--- Tuning lambda weights ---")
+                        best_lambdas, _, _ = self.tune_lambdas()
+                        self.model.lambdas = best_lambdas
+                        save_item(best_lambdas, model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
                 else:
                     self.model.interpolated_probs = self.model.interpolate_probs_with_laplace(
                         {"default": [1/self.n]*self.n}
@@ -121,13 +130,13 @@ class NGramTrainer:
             self.bpe.BPE_encoder()
             self.merges = self.bpe.merges
             self.tokens = self.bpe.tokens
-            save_item(self.merges, model_dir, merges_fname)
+            save_item(self.merges, merges_dir, merges_fname)
             save_item(self.tokens, model_dir, "bpe_tokens")
             assert self.bpe.tokens is not None, "BPE tokens non caricati! Controlla il salvataggio dei tokens."
 
             fig = self.bpe.plot_vocabulary_growth()
             if fig is not None:
-                save_item(fig, model_dir, "vocabulary_growth.png")
+                save_item(fig, merges_dir, "vocabulary_growth.png")
                 plt.close(fig)
             print("--- bpe trained ---")
 
@@ -143,6 +152,8 @@ class NGramTrainer:
                 self.best_lambdas = best_lambdas
                 self.model.lambdas = best_lambdas
                 print(f"Best lambdas set in model: {self.model.lambdas}")
+                lambdas_path = os.path.join(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
+                save_item(best_lambdas, model_dir, lambdas_path)
             else:
                 self.model.interpolated_probs = self.model.interpolate_probs_with_laplace(
                     {"default": [1/self.n]*self.n}

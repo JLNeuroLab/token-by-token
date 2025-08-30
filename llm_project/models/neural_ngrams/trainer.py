@@ -98,7 +98,7 @@ class NeuralNgramTrainer:
         return losses, val_losses
         
     def prepare_bpe(self, force_retrain=False, load_bpe_name=None):
-        bpe_dir = os.path.join(self.root, "experiments", "bpe_results", "train_results")
+        bpe_dir = os.path.join(self.root, "experiments", "saved_models", "neural_ngram")
         os.makedirs(bpe_dir, exist_ok=True)
         bpe_file = load_bpe_name or os.path.join(bpe_dir, f"BPE_merges_k{self.max_k}.pkl")
 
@@ -121,8 +121,12 @@ class NeuralNgramTrainer:
                 "text": self.bpe.text
             }
             save_item(bpe_dict, bpe_dir, os.path.basename(bpe_file))
+            save_item(self.bpe.tokens, bpe_dir, "bpe_tokens")
+            fig = self.bpe.plot_vocabulary_growth()
+            if fig is not None:
+                save_item(fig, bpe_dir, "vocabulary_growth.png")
+                plt.close(fig)
             print(f"BPE saved to {bpe_file}.")
-            return
             
         # mapping token <-> id
         self.bpe.token_to_id = {tok: i for i, tok in enumerate(self.bpe.tokens)}
@@ -196,13 +200,13 @@ class NeuralNgramTrainer:
         os.makedirs(ckpt_dir, exist_ok=True)
 
         # ---------------- BPE -----------------------
-        self.prepare_bpe(load_bpe_name=load_bpe_name)
+        self.prepare_bpe(load_bpe_name=load_bpe_name, force_retrain=force_retrain)
 
-        if self.model is None:
-            vocab_size = len(self.bpe.tokens)
+        if self.model is None or self.model.vocab_size != len(self.bpe.tokens):
+            print("Initializing model with vocab size:", len(self.bpe.tokens))
             self.model = NeuralNgram(
-                n=self.n,  # or pass as param if you want dynamic
-                vocab_size=vocab_size,
+                n=self.n,
+                vocab_size=len(self.bpe.tokens),
                 embedding_dim=self.embedding_dim
             )
 
@@ -222,6 +226,8 @@ class NeuralNgramTrainer:
         # ------------------- Automatic checkpoint loading -------------------
         if self.autoload and not force_retrain:
             ckpts = glob.glob(os.path.join(self.checkpoint_dir, "*.pkl"))
+            ckpts = [ckpt for ckpt in ckpts if "BPE" not in os.path.basename(ckpt)]
+    
             if ckpts:
                 ckpts = sorted(ckpts, key=lambda x: os.path.getmtime(x), reverse=True)
                 load_ckpt_name = os.path.basename(ckpts[0])
