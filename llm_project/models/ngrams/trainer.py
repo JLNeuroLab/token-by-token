@@ -121,10 +121,9 @@ class NGramTrainer:
             # training bpe 
             print("--- Training BPE (this might take a moment) ---")
             train_text = load_shakespeare("train")
-            train_text_sliced = train_text[:10000]
-            print(f"using {len(train_text_sliced) * 100 / len(train_text)}% of training set")
+            print(f"using {len(train_text) * 100 / len(train_text)}% of training set")
 
-            self.bpe = BPE(max_k=self.max_k, text=train_text_sliced)
+            self.bpe = BPE(max_k=self.max_k, text=train_text)
             norm_text = self.bpe.load_and_normalize()
             self.bpe.text = norm_text
             self.bpe.BPE_encoder()
@@ -205,6 +204,62 @@ class NGramTrainer:
 
         return perplexity
     
+    def plot_training_curve(self, steps=10):
+        """
+        Simulates a learning curve for the n-gram by incrementally feeding 
+        slices of the training data already used in train(), and computing 
+        perplexity on the validation set.
+        """
+        train_text = load_shakespeare("train")
+        # usa lo stesso slice del training originale
+        train_text_sliced = train_text[:10000]
+        valid_text = load_shakespeare("validation")
+        valid_text = normalize_text(valid_text)
+
+        # assicurati che BPE sia presente
+        if self.bpe is None:
+            self.bpe = BPE(max_k=self.max_k, text=train_text_sliced)
+            norm_text = self.bpe.load_and_normalize()
+            self.bpe.text = norm_text
+            self.bpe.BPE_encoder()
+            self.tokens = self.bpe.tokens
+
+        validation_tokens = self.bpe.BPE_segmenter(valid_text[:1000])
+
+        subset_size = len(train_text_sliced) // steps
+        perplexities = []
+
+        for i in range(1, steps + 1):
+            print(f"\n--- Step {i}/{steps} ---")
+            train_subset = train_text_sliced[:i * subset_size]
+            train_subset = normalize_text(train_subset)
+            train_tokens = self.bpe.BPE_segmenter(train_subset)
+
+            # build modello n-gram temporaneo
+            model = NGram(train_tokens, self.n)
+            model.build_all_ngram_freqs()
+            model_probs = model.interpolate_probs_with_laplace({"default": [1/self.n]*self.n})
+            self.model = model
+            self.model.interpolated_probs = model_probs
+
+            ppl = self.compute_perplexity(validation_tokens, label="default")
+            perplexities.append(ppl)
+            print(f"Step {i}: Perplexity = {ppl:.2f}")
+
+        # plot e salvataggio
+        plt.plot(range(1, steps + 1), perplexities, marker="o")
+        plt.xlabel("Training step")
+        plt.ylabel("Perplexity")
+        plt.title(f"N-gram ({self.n}-gram) Training Progression")
+        plt.grid(True)
+
+        plot_folder = os.path.join(self.root, "experiments", "saved_models", "ngram")
+        os.makedirs(plot_folder, exist_ok=True)
+        plot_path = os.path.join(plot_folder, f"ngram_learning_curve_n{self.n}.png")
+        plt.savefig(plot_path)
+        print(f"Plot saved to: {plot_path}")
+        plt.show()
+
     def plot_lambda_perplexities(self, results, folder, filename="lambda_perplexity.png"):
         """
         results: list of (label, perplexity)
@@ -312,3 +367,5 @@ if __name__ == "__main__":
     generated_tokens = model.generate_text(prompt_tokens, max_length=20)
     print("\nGenerated text:")
     print(generated_tokens)
+
+    trainer.plot_training_curve()

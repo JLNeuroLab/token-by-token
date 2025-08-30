@@ -14,7 +14,6 @@ from llm_project.models.ngrams.trainer import NGramTrainer
 from llm_project.models.neural_ngrams.trainer import NeuralNgramTrainer
 
 def run_training(args):
-    print("[INFO] Running training with arguments:", vars(args))
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     print_args_for_model(args)
 
@@ -44,8 +43,8 @@ def run_training(args):
         nngram_trainer = NeuralNgramTrainer(
             model=None,
             n=args.n,
-            train_text=train_text[:10000],
-            valid_text=valid_text[:1000],
+            train_text=train_text,
+            valid_text=valid_text,
             max_k=args.max_k,
             batch_size=args.batch_size,
             block_size=args.block_size,
@@ -137,7 +136,7 @@ def main():
     python main.py generate --model neural --prompt "Once upon a time" --max_new_tokens 100
 
     Available modes:
-    train     Train a GPT model from scratch on Shakespeare
+    train     Train a model from scratch on Shakespeare
     generate  Generate text using a trained model
 
     Made with love and caffeine (and a lot of Ritalin).
