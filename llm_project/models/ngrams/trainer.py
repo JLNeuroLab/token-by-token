@@ -307,7 +307,6 @@ class NGramTrainer:
         print("\n--- Starting Hyperparameter Tuning ---")
 
         valid_text = load_shakespeare("validation")
-        valid_text = valid_text[:1000]
         print(f"using {len(valid_text) * 100 / len(valid_text)}% of validation test")
         valid_text = normalize_text(valid_text)
         print("--- Segmenting prompt text ---")
