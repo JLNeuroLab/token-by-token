@@ -44,8 +44,8 @@ def run_training(args):
         nngram_trainer = NeuralNgramTrainer(
             model=None,
             n=args.n,
-            train_text=train_text[:10000],
-            valid_text=valid_text[:1000],
+            train_text=train_text,
+            valid_text=valid_text,
             max_k=args.max_k,
             batch_size=args.batch_size,
             block_size=args.block_size,
