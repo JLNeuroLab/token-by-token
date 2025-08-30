@@ -128,7 +128,7 @@ def main():
 
     Train examples
     python main.py train --model gpt --max_iters 5000 --dropout 0.1 --embd_dim 128 --n_layer 4
-    python main.py train --model ngram --n 3 --train_size 10000 --valid_size 1000 --tune_lambdas --force_retrain
+    python main.py train --model ngram --n 3 --tune_lambdas --force_retrain
     python main.py train --model neural --n 3 --epochs 10 --batch_size 32 --block_size 8 --embedding_dim 16 --force_retrain
 
     Generate examples
