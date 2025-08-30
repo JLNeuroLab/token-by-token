@@ -14,7 +14,8 @@ __Token by Token__ is a project focused on studying and experimenting with token
 
 ### 1.1 Clone the repository
 ```
-git clone <https://github.com/JLNeuroLab/token-by-token.git>
+git clone https://github.com/JLNeuroLab/token-by-token.git
+cd token-by-token
 ```
 ### 1.2 Create virtual environment
 ```
