@@ -33,30 +33,85 @@ class NGramTrainer:
         merges_fname = f"BPE_merges_k{self.max_k}.pkl"
 
         model_dir = os.path.join(self.root, "experiments", "saved_models", "ngram")
+        merges_dir = os.path.join(self.root, "experiments", "saved_models", "ngram")
         os.makedirs(model_dir, exist_ok=True)
 
         model_path = os.path.join(model_dir, model_fname)
         merges_path = os.path.join(model_dir, merges_fname)
 
-        # basic argument without need of training
-        if not force_retrain and os.path.exists(model_path) and os.path.exists(merges_path):
-            # -----------
-            print(f"--- Loading pre-trained model from {model_path} ---")
-            model_data = load_item(model_dir, model_fname)
-            self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
-            self.model.ngram_freqs = model_data["ngram_freqs"]
-            self.model.lambdas = model_data["lambdas"]
-            self.model.interpolated_probs = model_data["interpolated_probs"]
+        model_exists = os.path.exists(model_path)
+        bpe_exists = os.path.exists(merges_path)
 
-            # --- Load BPE merges and recreate BPE instance ---
-            self.merges = load_item(model_dir, merges_fname)
-            self.bpe = BPE(max_k=self.max_k, text=None)
-            self.bpe.merges = self.merges
-            self.bpe.tokens = self.model.tokens
-            self.tune_lambdas()
-            return self.model, self.merges
+        # --------------------training not forced:---------------------
+        if not force_retrain:
+            # if both model and tokenizer exist load both of them...
+            if bpe_exists and model_exists:
+                print("--- Found both model and tokenizer ---")
+                # ----------- Load model ---------------------------
+                print(f"--- Loading pre-trained model from {model_path} ---")
+                model_data = load_item(model_dir, model_fname)
+                self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
+                self.model.ngram_freqs = model_data["ngram_freqs"]
+                self.model.lambdas = model_data["lambdas"]
+                self.model.interpolated_probs = model_data["interpolated_probs"]
+
+                # --- Load BPE merges and recreate BPE instance ---
+                print(f"--- Loading pre-trained tokenizer from {merges_path} ---")
+                self.merges = load_item(merges_dir, merges_fname)
+                self.bpe = BPE(max_k=self.max_k, text=None)
+                self.bpe.merges = self.merges
+                self.bpe.tokens = self.model.tokens
+
+                return self.model, self.merges
                 
+            elif bpe_exists and not model_exists:
+                print("Tokenizer found, training N-gram model")
+                # --- Load BPE merges and recreate BPE instance ---
+                print(f"--- Loading pre-trained tokenizer from {merges_path} ---")
+                self.merges = load_item(merges_dir, merges_fname)
+                self.tokens = load_item(model_dir, "bpe_tokens.txt")
+                self.bpe = BPE(max_k=self.max_k, text=None)
+                
+                self.bpe.merges = self.merges
+                self.bpe.tokens = self.tokens
+
+                tokens = self.bpe.tokens
+                print("training n-gram model")
+                self.model = NGram(tokens, self.n)
+                self.model.build_all_ngram_freqs()
+                print("N-gram model training completed")
+            
+                if tune_lambdas:
+                    # --- Check if best lambdas are available from saved model ---
+                    lambdas_path = os.path.join(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
+                    if os.path.exists(lambdas_path):
+                        print(f"--- Loading best lambdas from {lambdas_path} ---")
+                        self.model.lambdas = load_item(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
+                        self.model.interpolated_probs = self.model.interpolate_probs_with_laplace({"best": self.model.lambdas})
+                    else:
+                        # --- Tune lambdas only if they're not available ---
+                        print("--- Tuning lambda weights ---")
+                        best_lambdas, _, _ = self.tune_lambdas()
+                        self.model.lambdas = best_lambdas
+                        save_item(best_lambdas, model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
+                else:
+                    self.model.interpolated_probs = self.model.interpolate_probs_with_laplace(
+                        {"default": [1/self.n]*self.n}
+                    )
+
+                model_dict = {
+                    "n": self.model.n,
+                    "ngram_freqs": self.model.ngram_freqs,
+                    "tokens": self.model.tokens,
+                    "lambdas": self.model.lambdas,
+                    "interpolated_probs": self.model.interpolated_probs
+                }
+                save_item(model_dict, model_dir, model_fname)
+                return self.model, self.merges
+            
         else:
+            # ------------------ Train forced -------------------------
+
             # if -t|no file then trains BPE and NG
             if force_retrain:
                 print("--- '-t' flag detected. Forcing model retraining... ---")
@@ -66,14 +121,23 @@ class NGramTrainer:
             # training bpe 
             print("--- Training BPE (this might take a moment) ---")
             train_text = load_shakespeare("train")
-            train_text = train_text[:10000]
-            print(f"using only {len(train_text)} of training set")
+            train_text_sliced = train_text[:10000]
+            print(f"using {len(train_text_sliced) * 100 / len(train_text)}% of training set")
 
-            self.bpe = BPE(max_k=self.max_k, text=train_text)
+            self.bpe = BPE(max_k=self.max_k, text=train_text_sliced)
             norm_text = self.bpe.load_and_normalize()
             self.bpe.text = norm_text
             self.bpe.BPE_encoder()
             self.merges = self.bpe.merges
+            self.tokens = self.bpe.tokens
+            save_item(self.merges, merges_dir, merges_fname)
+            save_item(self.tokens, model_dir, "bpe_tokens")
+            assert self.bpe.tokens is not None, "BPE tokens non caricati! Controlla il salvataggio dei tokens."
+
+            fig = self.bpe.plot_vocabulary_growth()
+            if fig is not None:
+                save_item(fig, merges_dir, "vocabulary_growth.png")
+                plt.close(fig)
             print("--- bpe trained ---")
 
             # build ngram
@@ -88,6 +152,8 @@ class NGramTrainer:
                 self.best_lambdas = best_lambdas
                 self.model.lambdas = best_lambdas
                 print(f"Best lambdas set in model: {self.model.lambdas}")
+                lambdas_path = os.path.join(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
+                save_item(best_lambdas, model_dir, lambdas_path)
             else:
                 self.model.interpolated_probs = self.model.interpolate_probs_with_laplace(
                     {"default": [1/self.n]*self.n}
@@ -104,8 +170,7 @@ class NGramTrainer:
                 "interpolated_probs": self.model.interpolated_probs
             }
             save_item(model_dict, model_dir, model_fname)
-            save_item(self.merges, model_dir, merges_fname)
-
+            
         return self.model, self.merges
     
     def compute_perplexity(self, test_tokens: list, label="best") :
@@ -187,9 +252,11 @@ class NGramTrainer:
         print("\n--- Starting Hyperparameter Tuning ---")
 
         valid_text = load_shakespeare("validation")
-        valid_text = valid_text[:1000]
+        print(f"using {len(valid_text) * 100 / len(valid_text)}% of validation test")
         valid_text = normalize_text(valid_text)
+        print("--- Segmenting prompt text ---")
         validation_tokens = self.bpe.BPE_segmenter(valid_text)
+        print("--- Segmentation completed ---")
         
         best_lambdas = None
         best_model_probs = None
@@ -226,11 +293,6 @@ class NGramTrainer:
         return best_lambdas, lowest_perplexity, best_model_probs
 
 if __name__ == "__main__":
-    # --- Load datasets ---
-    train_text = load_shakespeare("train")[:10000]
-    valid_text = load_shakespeare("validation")[:1000]
-    print(f"Train size: {len(train_text)}, Validation size: {len(valid_text)}")
-
     # --- Hyperparameters ---
     max_k = 2000
     n = 3
@@ -239,7 +301,7 @@ if __name__ == "__main__":
     trainer = NGramTrainer(model=None, tokens=None, n=n, max_k=max_k)
 
     # --- Train BPE and NGram model (train() gestisce tutto) ---
-    model, merges = trainer.train(tune_lambdas=True, force_retrain=False)
+    model, merges = trainer.train(tune_lambdas=True, force_retrain=True)
     print("Training completed.")
 
     # --- Generate text ---

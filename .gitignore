@@ -1,14 +1,16 @@
 # Ignore VS Code settings
-.vscode/
-.idea/
+.vscode
+.idea
 
 # Ignore python build stuff
-*.egg-info/
+*.egg-info
 dist/
 build/
 
 # Ignore Git internal folder
 .git/
+.gitignore
+.gitattributes
 
 # OS
 . DS_Store
@@ -23,8 +25,11 @@ node_modules/
 *.zip
 
 # Python cache
-**/__pycache__/
+__pycache__
 *.pyc
+__init__.py
+*.egg-info/
+
 
 # Editor-specific files
 .vscode/
@@ -41,3 +46,7 @@ tuning_results.json
 
 # Ignore the tree graph of the project
 LLM_project.txt
+
+# Ignore virtual environment
+venv
+

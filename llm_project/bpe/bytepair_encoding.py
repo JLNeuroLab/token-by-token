@@ -298,6 +298,7 @@ class BPE:
         plt.title("vocabulary size over number of merges")
         plt.legend()
         plt.tight_layout()
+        return fig
         # save_item(fig, "plots", "vocabulary_growth")
 
     # ------------------Tokenize test text with the training tokens--------------------------

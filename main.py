@@ -18,8 +18,8 @@ def run_training(args):
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     print_args_for_model(args)
 
-    train_text = load_shakespeare("train")[:args.train_size]
-    valid_text = load_shakespeare("validation")[:args.valid_size]
+    train_text = load_shakespeare("train")
+    valid_text = load_shakespeare("validation")
 
 
     if args.model == "gpt":
@@ -44,8 +44,8 @@ def run_training(args):
         nngram_trainer = NeuralNgramTrainer(
             model=None,
             n=args.n,
-            train_text=train_text,
-            valid_text=valid_text,
+            train_text=train_text[:10000],
+            valid_text=valid_text[:1000],
             max_k=args.max_k,
             batch_size=args.batch_size,
             block_size=args.block_size,
@@ -128,7 +128,7 @@ def main():
 
     Train examples
     python main.py train --model gpt --max_iters 5000 --dropout 0.1 --embd_dim 128 --n_layer 4
-    python main.py train --model ngram --n 3 --train_size 10000 --valid_size 1000 --tune_lambdas --force_retrain
+    python main.py train --model ngram --n 3 --tune_lambdas --force_retrain
     python main.py train --model neural --n 3 --epochs 10 --batch_size 32 --block_size 8 --embedding_dim 16 --force_retrain
 
     Generate examples
@@ -231,7 +231,7 @@ def print_args_for_model(args):
     if args.model == "gpt":
         relevant = ["mode", "model", "max_iters", "embd_dim", "n_layer", "dropout", "max_k", "device"]
     elif args.model == "ngram":
-        relevant = ["mode", "model", "n", "train_size", "valid_size", "tune_lambdas", "force_retrain", "max_k", "device"]
+        relevant = ["mode", "model", "n", "tune_lambdas", "force_retrain", "max_k", "device"]
     elif args.model == "neural":
         relevant = ["mode", "model", "n", "max_k", "batch_size", "block_size", "embedding_dim",
                     "epochs", "lr", "patience", "print_every", "device"]
