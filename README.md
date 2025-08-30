@@ -1,6 +1,5 @@
-# LLM Project
-
----
+# Token by Token
+__Token by Token__ is a project focused on studying and experimenting with token-level language models. We implemented three types of models: the classic __n-gram__, the __neural n-gram__, and a __GPT-based model__. All models were trained on the __Shakespeare dataset__. Model evaluation was conducted both quantitatively, using __perplexity__, and qualitatively, through __text generation__, assessing each model’s ability to produce coherent sequences faithful to the original style.
 
 ## Table of Contents
 1. [Environment Setup](#environment-setup)
@@ -40,45 +39,23 @@ python main.py
 
 ## 2 Project Structure
 ```
-📦 LLM_project/                       Root of the LLM project
-├──── 📂 configs/                      Configuration folder
-│     ├──── 📄 base_config.py          Base configurations (e.g., general parameters)
-│     └──── 📄 gpt_config.py           GPT-specific configurations
-├──── 📂 data/                         Data folder
-│     ├──── 📂 processed/              Preprocessed data
-│     └──── 📂 raw/                    Raw/original data
-├──── 📂 experiments/                  Scripts or notes for experiments
-├──── 📂 llm_project/                  Main project code
-│     ├──── 📂 bpe/                    Byte Pair Encoding (tokenization)
-│     │     └──── 📄 bytepair_encoding.py   BPE implementation script
-│     ├──── 📂 models/                 Implemented models
-│     │     ├──── 📂 gpt/              GPT model
-│     │     │     ├──── 📄 attention.py     Attention module
-│     │     │     ├──── 📄 generator.py     Text generation module
-│     │     │     ├──── 📄 model.py         GPT architecture definition
-│     │     │     └──── 📄 train.py         GPT training loop
-│     │     ├──── 📂 neural_ngrams/        Neural n-gram model
-│     │     │     ├──── 📄 model.py         Neural n-gram network definition
-│     │     │     └──── 📄 trainer.py       Neural n-gram training loop
-│     │     └──── 📂 ngrams/               Classic n-gram model
-│     │           ├──── 📄 model.py         N-gram definition
-│     │           └──── 📄 trainer.py       N-gram training loop
-│     └──── 📂 utils/                      Utility functions
-│           ├──── 📄 dataloader.py         Data loading and batching
-│           ├──── 📄 file_manager.py       File handling (read/write)
-│           └──── 📄 token_mapping.py      Token <-> index mapping
-├──── 📂 tests/                           Automated tests
-│     ├──── 📄 test_attention.py          Tests for attention module
-│     ├──── 📄 test_bpe.py                Tests for BPE
-│     ├──── 📄 test_generator.py          Tests for generator module
-│     ├──── 📄 test_model.py              Tests for models
-│     └──── 📄 test_training_integration.py  Integration tests for training
-├──── 📄 experiments.txt                  Notes/results from experiments
-├──── 📄 main.py                          Main entry point to run the project
-├──── 📄 README.md                        Project documentation
-├──── 📄 requirements.txt                 Project dependencies
-└──── 📄 run_experiments.py              Script to run specific experiments
-
-```
+📦 LLM_project/
+├────── 📂 configs/
+├────── 📂 data/
+│       ├────── 📂 processed/
+│       └────── 📂 raw/
+├────── 📂 experiments/
+├────── 📂 llm_project/
+│       ├────── 📂 bpe/
+│       ├────── 📂 models/
+│       │       ├────── 📂 gpt/
+│       │       ├────── 📂 neural_ngrams/
+│       │       └────── 📂 ngrams/
+│       └────── 📂 utils/
+├────── 📂 tests/
+├────── 📄 experiments.txt
+├────── 📄 pyproject.toml
+├────── 📄 README.md
+└────── 📄 requirements.txt
 ## 3. How to use
 ```
