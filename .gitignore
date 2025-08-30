@@ -41,3 +41,6 @@ tuning_results.json
 
 # Ignore the tree graph of the project
 LLM_project.txt
+
+# Ignore virtual environment
+venv

@@ -231,7 +231,7 @@ def print_args_for_model(args):
     if args.model == "gpt":
         relevant = ["mode", "model", "max_iters", "embd_dim", "n_layer", "dropout", "max_k", "device"]
     elif args.model == "ngram":
-        relevant = ["mode", "model", "n", "train_size", "valid_size", "tune_lambdas", "force_retrain", "max_k", "device"]
+        relevant = ["mode", "model", "n", "tune_lambdas", "force_retrain", "max_k", "device"]
     elif args.model == "neural":
         relevant = ["mode", "model", "n", "max_k", "batch_size", "block_size", "embedding_dim",
                     "epochs", "lr", "patience", "print_every", "device"]
