@@ -18,8 +18,8 @@ def run_training(args):
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     print_args_for_model(args)
 
-    train_text = load_shakespeare("train")[:args.train_size]
-    valid_text = load_shakespeare("validation")[:args.valid_size]
+    train_text = load_shakespeare("train")
+    valid_text = load_shakespeare("validation")
 
 
     if args.model == "gpt":
@@ -44,8 +44,8 @@ def run_training(args):
         nngram_trainer = NeuralNgramTrainer(
             model=None,
             n=args.n,
-            train_text=train_text,
-            valid_text=valid_text,
+            train_text=train_text[:10000],
+            valid_text=valid_text[:1000],
             max_k=args.max_k,
             batch_size=args.batch_size,
             block_size=args.block_size,
