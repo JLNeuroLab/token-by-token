@@ -1,371 +1,239 @@
 import os
+import math
+import time
 import numpy as np
+from collections import Counter
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 from llm_project.utils.file_manager import save_item, load_item
 from llm_project.models.ngrams.model import NGram
 from llm_project.bpe.bytepair_encoding import BPE, normalize_text
 from llm_project.utils.dataloader import load_shakespeare
 
-class NGramTrainer:
 
-    def __init__(self, model, tokens, n, max_k, root = None):
+class NGramTrainer:
+    def __init__(self, model, tokens, n, max_k, root=None):
         self.model = model
         self.tokens = tokens
         self.n = n
-        self.root = root if root is not None else os.path.abspath(
-                                                        os.path.join(
-                                                            os.path.dirname(__file__),
-                                                            "..",
-                                                            "..",
-                                                            ".."
-                                                        )
-                                                    )
+        self.root = (
+            root
+            if root is not None
+            else os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..")
+            )
+        )
         self.bpe = None
-        self.merges = None
         self.max_k = max_k
 
     def train(self, force_retrain=False, tune_lambdas=True):
-        """
-        Loads data and trains the BPE and N-gram models.
-        If -t/--train a retraining is forced.
-        """
+        """Loads data and trains the BPE and N-gram models."""
         model_fname = f"ngram_model_n{self.n}_k{self.max_k}.pkl"
         merges_fname = f"BPE_merges_k{self.max_k}.pkl"
-
         model_dir = os.path.join(self.root, "experiments", "saved_models", "ngram")
-        merges_dir = os.path.join(self.root, "experiments", "saved_models", "ngram")
         os.makedirs(model_dir, exist_ok=True)
-
         model_path = os.path.join(model_dir, model_fname)
         merges_path = os.path.join(model_dir, merges_fname)
 
-        model_exists = os.path.exists(model_path)
-        bpe_exists = os.path.exists(merges_path)
+        if (
+            not force_retrain
+            and os.path.exists(model_path)
+            and os.path.exists(merges_path)
+        ):
+            print("--- Loading pre-trained model and tokenizer ---")
+            model_data = load_item(model_dir, model_fname)
+            self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
+            self.model.ngram_freqs = model_data.get("ngram_freqs", {})
+            self.model.lambdas = model_data.get("lambdas", {})
+            self.bpe = BPE(max_k=self.max_k)
+            self.bpe.merges = load_item(model_dir, merges_fname)
+            return self.model, self.bpe.merges
 
-        # --------------------training not forced:---------------------
-        if not force_retrain:
-            # if both model and tokenizer exist load both of them...
-            if bpe_exists and model_exists:
-                print("--- Found both model and tokenizer ---")
-                # ----------- Load model ---------------------------
-                print(f"--- Loading pre-trained model from {model_path} ---")
-                model_data = load_item(model_dir, model_fname)
-                self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
-                self.model.ngram_freqs = model_data["ngram_freqs"]
-                self.model.lambdas = model_data["lambdas"]
-                self.model.interpolated_probs = model_data["interpolated_probs"]
-
-                # --- Load BPE merges and recreate BPE instance ---
-                print(f"--- Loading pre-trained tokenizer from {merges_path} ---")
-                self.merges = load_item(merges_dir, merges_fname)
-                self.bpe = BPE(max_k=self.max_k, text=None)
-                self.bpe.merges = self.merges
-                self.bpe.tokens = self.model.tokens
-
-                return self.model, self.merges
-                
-            elif bpe_exists and not model_exists:
-                print("Tokenizer found, training N-gram model")
-                # --- Load BPE merges and recreate BPE instance ---
-                print(f"--- Loading pre-trained tokenizer from {merges_path} ---")
-                self.merges = load_item(merges_dir, merges_fname)
-                self.tokens = load_item(model_dir, "bpe_tokens.txt")
-                self.bpe = BPE(max_k=self.max_k, text=None)
-                
-                self.bpe.merges = self.merges
-                self.bpe.tokens = self.tokens
-
-                tokens = self.bpe.tokens
-                print("training n-gram model")
-                self.model = NGram(tokens, self.n)
-                self.model.build_all_ngram_freqs()
-                print("N-gram model training completed")
-            
-                if tune_lambdas:
-                    # --- Check if best lambdas are available from saved model ---
-                    lambdas_path = os.path.join(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
-                    if os.path.exists(lambdas_path):
-                        print(f"--- Loading best lambdas from {lambdas_path} ---")
-                        self.model.lambdas = load_item(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
-                        self.model.interpolated_probs = self.model.interpolate_probs_with_laplace({"best": self.model.lambdas})
-                    else:
-                        # --- Tune lambdas only if they're not available ---
-                        print("--- Tuning lambda weights ---")
-                        best_lambdas, _, _ = self.tune_lambdas()
-                        self.model.lambdas = best_lambdas
-                        save_item(best_lambdas, model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
-                else:
-                    self.model.interpolated_probs = self.model.interpolate_probs_with_laplace(
-                        {"default": [1/self.n]*self.n}
-                    )
-
-                model_dict = {
-                    "n": self.model.n,
-                    "ngram_freqs": self.model.ngram_freqs,
-                    "tokens": self.model.tokens,
-                    "lambdas": self.model.lambdas,
-                    "interpolated_probs": self.model.interpolated_probs
-                }
-                save_item(model_dict, model_dir, model_fname)
-                return self.model, self.merges
-            
-        else:
-            # ------------------ Train forced -------------------------
-
-            # if -t|no file then trains BPE and NG
-            if force_retrain:
-                print("--- '-t' flag detected. Forcing model retraining... ---")
-            else:
-                print("--- No pre-trained model found. Training a new one... ---")
-
-            # training bpe 
-            print("--- Training BPE (this might take a moment) ---")
-            train_text = load_shakespeare("train")
-            print(f"using {len(train_text) * 100 / len(train_text)}% of training set")
-
+        if force_retrain or not os.path.exists(merges_path):
+            print("--- Training BPE tokenizer ---")
+            train_text = "".join(load_shakespeare("train"))
             self.bpe = BPE(max_k=self.max_k, text=train_text)
-            norm_text = self.bpe.load_and_normalize()
-            self.bpe.text = norm_text
             self.bpe.BPE_encoder()
-            self.merges = self.bpe.merges
+            save_item(self.bpe.merges, model_dir, merges_fname)
             self.tokens = self.bpe.tokens
-            save_item(self.merges, merges_dir, merges_fname)
-            save_item(self.tokens, model_dir, "bpe_tokens")
-            assert self.bpe.tokens is not None, "BPE tokens non caricati! Controlla il salvataggio dei tokens."
+        else:
+            print("--- Loading existing BPE tokenizer ---")
+            self.bpe = BPE(max_k=self.max_k)
+            self.bpe.merges = load_item(model_dir, merges_fname)
+            print("--- Re-tokenizing training text with loaded BPE ---")
+            train_text = "".join(load_shakespeare("train"))
+            self.tokens = self.bpe.BPE_segmenter(normalize_text(train_text))
 
-            fig = self.bpe.plot_vocabulary_growth()
-            if fig is not None:
-                save_item(fig, merges_dir, "vocabulary_growth.png")
-                plt.close(fig)
-            print("--- bpe trained ---")
+        print("--- Training N-gram model ---")
+        self.model = NGram(self.tokens, self.n)
+        self.model.build_all_ngram_freqs()
 
-            # build ngram
-            print("--- Training ngram model ---")
-            tokens = self.bpe.tokens
-            self.model = NGram(tokens, self.n)
-            self.model.build_all_ngram_freqs()
+        if tune_lambdas:
+            best_lambdas, _, _ = self.tune_lambdas()
+            self.model.lambdas = {"best": best_lambdas}
+        else:
+            self.model.lambdas = {"default": [1 / self.n] * self.n}
 
-            if tune_lambdas:
-                print("--- Tuning lambda weights ---")
-                best_lambdas, _, _ = self.tune_lambdas()
-                self.best_lambdas = best_lambdas
-                self.model.lambdas = best_lambdas
-                print(f"Best lambdas set in model: {self.model.lambdas}")
-                lambdas_path = os.path.join(model_dir, f"best_lambdas_n{self.n}_k{self.max_k}.pkl")
-                save_item(best_lambdas, model_dir, lambdas_path)
-            else:
-                self.model.interpolated_probs = self.model.interpolate_probs_with_laplace(
-                    {"default": [1/self.n]*self.n}
-                )
+        model_dict = {
+            "n": self.model.n,
+            "tokens": self.model.tokens,
+            "ngram_freqs": self.model.ngram_freqs,
+            "lambdas": self.model.lambdas,
+        }
+        save_item(model_dict, model_dir, model_fname)
+        return self.model, self.bpe.merges
 
-            # Saves model to plk file
-            print(f"--- Saving model to {model_path} ---")
-            # save model params in a dict to make compatible with save_item
-            model_dict = {
-                "n": self.model.n,
-                "ngram_freqs": self.model.ngram_freqs,
-                "tokens": self.model.tokens,
-                "lambdas": self.model.lambdas,
-                "interpolated_probs": self.model.interpolated_probs
-            }
-            save_item(model_dict, model_dir, model_fname)
-            
-        return self.model, self.merges
-    
-    def compute_perplexity(self, test_tokens: list, label="best") :
-        """
-            Calculates the perplexity score of the ngram model on a text.
-
-            Args:
-                test_tokens (list): tokens resulting from word tokenization of the text (BPE)
-                ngrams_probs (dict): mapping ngrams to interpolated probabilities
-                n (int): ngram order
-            Returns:
-                Perplexity score
-        """
-        test_ngrams = []
-        for i in range(len(test_tokens) - self.n + 1):
-            ngram = tuple(test_tokens[i : i + self.n])
-            test_ngrams.append(ngram)
-
-        if not self.model.interpolated_probs:
-            raise ValueError("Run interpolate_probs_with_laplace before computing perplexity")
-    
-        log_probs_sum = 0.0
-        counts = 0
-        probs = self.model.interpolated_probs[label]
-        for ngram in test_ngrams:
-            prob = probs.get(ngram, 1e-8)
-            log_probs_sum += np.log(prob)
-            counts += 1
-
-        avg_log_prob = log_probs_sum / counts if counts > 0 else float('-inf')
+    def compute_perplexity(self, test_tokens: list, lambdas: list):
+        """Calculates perplexity using on-the-fly probability and vectorized counts."""
+        test_ngrams = [
+            tuple(test_tokens[i : i + self.n])
+            for i in range(len(test_tokens) - self.n + 1)
+        ]
+        if not test_ngrams:
+            return float("inf")
+        ngram_counts = Counter(test_ngrams)
+        unique_ngrams = list(ngram_counts.keys())
+        freqs = np.array([ngram_counts[ng] for ng in unique_ngrams])
+        probs = np.array(
+            [self.model.get_interpolated_prob(ng, lambdas) for ng in unique_ngrams]
+        )
+        probs[probs == 0] = 1e-10
+        log_probs_sum = np.sum(freqs * np.log(probs))
+        total_ngrams_in_test = np.sum(freqs)
+        avg_log_prob = log_probs_sum / total_ngrams_in_test
         perplexity = np.exp(-avg_log_prob)
-
         return perplexity
-    
-    def plot_training_curve(self, steps=10):
-        """
-        Simulates a learning curve for the n-gram by incrementally feeding 
-        slices of the training data already used in train(), and computing 
-        perplexity on the validation set.
-        """
-        train_text = load_shakespeare("train")
-        # usa lo stesso slice del training originale
-        train_text_sliced = train_text[:10000]
-        valid_text = load_shakespeare("validation")
-        valid_text = normalize_text(valid_text)
 
-        # assicurati che BPE sia presente
-        if self.bpe is None:
-            self.bpe = BPE(max_k=self.max_k, text=train_text_sliced)
-            norm_text = self.bpe.load_and_normalize()
-            self.bpe.text = norm_text
-            self.bpe.BPE_encoder()
-            self.tokens = self.bpe.tokens
-
-        validation_tokens = self.bpe.BPE_segmenter(valid_text[:1000])
-
-        subset_size = len(train_text_sliced) // steps
-        perplexities = []
-
-        for i in range(1, steps + 1):
-            print(f"\n--- Step {i}/{steps} ---")
-            train_subset = train_text_sliced[:i * subset_size]
-            train_subset = normalize_text(train_subset)
-            train_tokens = self.bpe.BPE_segmenter(train_subset)
-
-            # build modello n-gram temporaneo
-            model = NGram(train_tokens, self.n)
-            model.build_all_ngram_freqs()
-            model_probs = model.interpolate_probs_with_laplace({"default": [1/self.n]*self.n})
-            self.model = model
-            self.model.interpolated_probs = model_probs
-
-            ppl = self.compute_perplexity(validation_tokens, label="default")
-            perplexities.append(ppl)
-            print(f"Step {i}: Perplexity = {ppl:.2f}")
-
-        # plot e salvataggio
-        plt.plot(range(1, steps + 1), perplexities, marker="o")
-        plt.xlabel("Training step")
-        plt.ylabel("Perplexity")
-        plt.title(f"N-gram ({self.n}-gram) Training Progression")
-        plt.grid(True)
-
-        plot_folder = os.path.join(self.root, "experiments", "saved_models", "ngram")
-        os.makedirs(plot_folder, exist_ok=True)
-        plot_path = os.path.join(plot_folder, f"ngram_learning_curve_n{self.n}.png")
-        plt.savefig(plot_path)
-        print(f"Plot saved to: {plot_path}")
-        plt.show()
-
-    def plot_lambda_perplexities(self, results, folder, filename="lambda_perplexity.png"):
-        """
-        results: list of (label, perplexity)
-        """
+    def plot_lambda_perplexities(
+        self, results, folder, filename="lambda_perplexity.png"
+    ):
+        """Plots a bar chart of perplexity results for different lambda sets."""
         labels, perplexities = zip(*results)
-        x = np.arange(len(labels))
-
-        fig, ax = plt.subplots(figsize=(8, 6))
-        bars = ax.bar(x, perplexities, color="skyblue", edgecolor="black")
-
-        # aggiungi valori sopra le barre
-        for bar, val in zip(bars, perplexities):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
-                    f"{val:.2f}", ha='center', va='bottom', fontsize=10)
-
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels, rotation=30, ha="right")
-        ax.set_ylabel("Perplexity")
-        ax.set_title("Confronto λ-sets vs Perplexity")
-        ax.grid(axis="y", linestyle="--", alpha=0.7)
-
+        fig, ax = plt.subplots(figsize=(10, 6))
+        bars = ax.bar(labels, perplexities, color="skyblue", edgecolor="black")
+        ax.set_ylabel("Perplexity (Lower is Better)")
+        ax.set_title("Lambda Weighting Schemes vs. Perplexity")
+        plt.setp(ax.get_xticklabels(), rotation=15, ha="right")
+        for bar in bars:
+            yval = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                yval,
+                f"{yval:.2f}",
+                va="bottom",
+                ha="center",
+            )
         save_item(fig, folder, filename, text_version=False)
+        print(f"\nPerplexity comparison plot saved to {os.path.join(folder, filename)}")
         plt.close(fig)
 
-    
     def tune_lambdas(self):
-        """
-        Finds the optimal lambda weights for an n-gram model by minimizing
-        perplexity on a validation set.
-        """
-    
-        # --- Define lambda
-        print("\n--- Defining Lambda Candidates ---")
-
-        # Weights are for [unigram, bigram, trigram]
+        """Finds the optimal lambda weights by minimizing perplexity."""
+        print("\n--- Tuning lambdas ---")
         lambda_candidates = {
-            "set1 (more weight on trigram)": [0.1, 0.3, 0.6],
-            "set2 (balanced)": [0.33, 0.33, 0.34],
-            "set3 (more weight on bigram)": [0.1, 0.6, 0.3],
-            "set4 (more weight on unigram)": [0.6, 0.3, 0.1],
+            "Trigram Focus": [0.1, 0.3, 0.6],
+            "Balanced": [0.33, 0.33, 0.34],
+            "Bigram Focus": [0.1, 0.6, 0.3],
+            "Unigram Focus": [0.6, 0.3, 0.1],
         }
-        print(f"Testing {len(lambda_candidates)} sets of lambdas.")
-
-        # --- optimization loop
-        print("\n--- Starting Hyperparameter Tuning ---")
-
-        valid_text = load_shakespeare("validation")
-        print(f"using {len(valid_text) * 100 / len(valid_text)}% of validation test")
-        valid_text = normalize_text(valid_text)
-        print("--- Segmenting prompt text ---")
-        validation_tokens = self.bpe.BPE_segmenter(valid_text)
-        print("--- Segmentation completed ---")
-        
-        best_lambdas = None
-        best_model_probs = None
-        lowest_perplexity = float("inf")
-
-        results = []
-        for label, current_lambdas in lambda_candidates.items():
-            print(f"\nTesting {label}: {current_lambdas}...")
-
-            # Train the model with the current set of lambdas on the t_toks
-            # Wrap the lambdas list in another dictionary
-            model_probs = self.model.interpolate_probs_with_laplace({label: current_lambdas})
-            # Evaluate the model on the validation tokens
-            perplexity = self.compute_perplexity(validation_tokens, label=label)
-            print(f"Perplexity on validation set: {perplexity:.4f}")
+        valid_text = "".join(load_shakespeare("validation"))
+        validation_tokens = self.bpe.BPE_segmenter(normalize_text(valid_text))
+        best_lambdas, lowest_perplexity, results = None, float("inf"), []
+        for label, current_lambdas in tqdm(
+            lambda_candidates.items(), desc="Tuning Lambdas"
+        ):
+            perplexity = self.compute_perplexity(validation_tokens, current_lambdas)
             results.append((label, perplexity))
-
-            # Check if this is the best result so far
             if perplexity < lowest_perplexity:
-                lowest_perplexity = perplexity
-                best_lambdas = current_lambdas
-                best_model_probs = model_probs[label]
-                print(f"!!! New best perplexity found: {lowest_perplexity:.4f} !!!")
-                self.model.lambdas = best_lambdas
-                self.model.interpolated_probs = { "best": best_model_probs }
-
-        # --- 4. REPORT THE RESULTS ---
-        print("\n--- Tuning Complete ---")
-        print(f"The lowest perplexity achieved was: {lowest_perplexity:.4f}")
-        print(f"The best lambda weights are: {best_lambdas}")
-        plot_folder = os.path.join(self.root, "experiments", "saved_models", "ngram")
+                lowest_perplexity, best_lambdas = perplexity, current_lambdas
+        print(
+            f"\n--- Best Lambdas: {best_lambdas} with Perplexity: {lowest_perplexity:.4f} ---"
+        )
+        plot_folder = os.path.join(
+            self.root, "experiments", "plots", "ngram_comparison"
+        )
+        os.makedirs(plot_folder, exist_ok=True)
         self.plot_lambda_perplexities(results, folder=plot_folder)
+        return best_lambdas, lowest_perplexity, None
 
-        return best_lambdas, lowest_perplexity, best_model_probs
+    # --- NEWLY ADDED EXPERIMENT METHODS ---
+    def run_comparison_experiment(self, n_values_to_test=[1, 2, 3, 4], max_k_bpe=2000):
+        """Trains and evaluates N-gram models for different n, then plots the results."""
+        output_folder = os.path.join(
+            self.root, "experiments", "plots", "ngram_comparison"
+        )
+        os.makedirs(output_folder, exist_ok=True)
+        perplexity_results = {}
+
+        print("--- Step 1: Training BPE Tokenizer (once) ---")
+        train_text = "".join(load_shakespeare("train"))
+        valid_text = "".join(load_shakespeare("validation"))
+        bpe = BPE(max_k=max_k_bpe, text=train_text)
+        bpe.BPE_encoder()
+        train_tokens = bpe.tokens
+        validation_tokens = bpe.BPE_segmenter(normalize_text(valid_text))
+        print(f"BPE training complete. Vocabulary size: {len(bpe.vocab)}")
+
+        for n in n_values_to_test:
+            print(f"\n--- Step 2: Training and Evaluating for n={n} ---")
+            temp_trainer = NGramTrainer(
+                model=None, tokens=train_tokens, n=n, max_k=max_k_bpe
+            )
+            temp_trainer.bpe = bpe
+            temp_trainer.train(force_retrain=True, tune_lambdas=False)
+
+            # ADJUSTMENT: Pass the default lambdas directly to the new compute_perplexity method
+            default_lambdas = [1 / n] * n
+            perplexity = temp_trainer.compute_perplexity(
+                validation_tokens, lambdas=default_lambdas
+            )
+
+            perplexity_results[n] = perplexity
+            print(f"✅ n={n}: Perplexity = {perplexity:.4f}")
+
+        print("\n--- Step 3: Generating Perplexity Comparison Plot ---")
+        self.plot_perplexity_comparison(perplexity_results, output_folder)
+        print("\n--- Comparison Experiment Complete ---")
+
+    def plot_perplexity_comparison(self, results: dict, output_folder: str):
+        """Generates a bar chart comparing perplexity for different n."""
+        n_values = sorted(results.keys())
+        perplexities = [results[n] for n in n_values]
+        fig, ax = plt.subplots(figsize=(10, 6))
+        bars = ax.bar(
+            [str(n) for n in n_values], perplexities, color="coral", edgecolor="black"
+        )
+        ax.set_xlabel("N-gram Order (n)")
+        ax.set_ylabel("Perplexity (Lower is Better)")
+        ax.set_title("N-gram Model Perplexity vs. Order (n)")
+        ax.grid(axis="y", linestyle="--")
+        for bar in bars:
+            yval = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                yval,
+                f"{yval:.2f}",
+                va="bottom",
+                ha="center",
+            )
+        min_perplexity = min(perplexities)
+        best_n_index = perplexities.index(min_perplexity)
+        bars[best_n_index].set_color("mediumseagreen")
+        ax.legend([bars[best_n_index]], ["Best Performance"])
+        plot_filename = "ngram_perplexity_vs_n_comparison.png"
+        save_item(fig, output_folder, plot_filename)
+        print(f"\nPlot saved to {os.path.join(output_folder, plot_filename)}")
+        plt.show()
+
 
 if __name__ == "__main__":
-    # --- Hyperparameters ---
-    max_k = 2000
-    n = 3
+    # This block now runs your requested n-gram comparison experiment
+    print("--- Running N-gram Performance Comparison ---")
 
-    # --- Initialize trainer without pre-created BPE ---
-    trainer = NGramTrainer(model=None, tokens=None, n=n, max_k=max_k)
+    # We can initialize with dummy values as the experiment creates its own trainers
+    comparison_runner = NGramTrainer(model=None, tokens=None, n=3, max_k=2000)
 
-    # --- Train BPE and NGram model (train() gestisce tutto) ---
-    model, merges = trainer.train(tune_lambdas=True, force_retrain=True)
-    print("Training completed.")
-
-    # --- Generate text ---
-    prompt_text = "The"
-    prompt_text = normalize_text(prompt_text)
-    prompt_tokens = trainer.bpe.BPE_segmenter(prompt_text)
-
-    generated_tokens = model.generate_text(prompt_tokens, max_length=20)
-    print("\nGenerated text:")
-    print(generated_tokens)
-
-    trainer.plot_training_curve()
+    # Call the experiment method
+    comparison_runner.run_comparison_experiment(
+        n_values_to_test=[2, 3, 4, 5], max_k_bpe=1000
+    )

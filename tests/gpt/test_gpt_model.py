@@ -1,6 +1,12 @@
 import torch
 from torch.nn import functional as F
 from llm_project.models.gpt.model import GPT
+import torch.nn.functional as F
+from llm_project.models.gpt.model import Gelu
+from hypothesis import given, strategies as st
+import hypothesis.extra.numpy as hynp
+import numpy as np
+
 
 # (You can keep the MockGPTConfig class from the previous test)
 
@@ -144,3 +150,53 @@ def test_gpt_model_is_sensitive_to_position():
     # ASSERT
     # The outputs should NOT be close to each other if positional embeddings work
     assert not torch.allclose(output1, output2, atol=1e-6)
+
+
+# Utility: convert np array to torch tensor
+
+
+def np_to_torch(x_np):
+    return torch.tensor(x_np, dtype=torch.float32)
+
+
+# Property-based test
+
+
+@given(
+    # list of floats in range
+    st.lists(st.floats(-10, 10), min_size=1, max_size=100)
+)
+def test_gelu_matches_torch_on_random_input(x_list):
+    x = torch.tensor(x_list, dtype=torch.float32)
+    gelu_custom = Gelu()
+    y1 = gelu_custom(x)
+    y2 = F.gelu(x, approximate="tanh")
+    # NOTE: atol needs to be a bit forgiving due to erf precision
+    assert torch.allclose(y1, y2, atol=1e-4), "Mismatch between custom and torch GELU"
+
+
+def test_gelu_output_shape():
+    gelu = Gelu()
+    x = torch.randn(10)
+    y = gelu(x)
+    assert y.shape == x.shape
+
+
+def test_gelu_symmetry():
+    gelu = Gelu()
+    x = torch.tensor([-1.0, 0.0, 1.0])
+    y = gelu(x)
+
+    # Approximate symmetry
+    assert torch.allclose(y[0], -y[2], atol=0.7)
+    assert torch.isclose(y[1], torch.tensor(0.0), atol=1e-4)
+
+
+def test_gelu_compare_to_torch_builtin():
+    import torch.nn.functional as F
+
+    gelu_custom = Gelu()
+    x = torch.randn(100)
+    y_custom = gelu_custom(x)
+    y_builtin = F.gelu(x, approximate="tanh")
+    assert torch.allclose(y_custom, y_builtin, atol=1e-5)

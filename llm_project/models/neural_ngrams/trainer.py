@@ -292,10 +292,10 @@ class NeuralNgramTrainer:
         step = 0
         patience_counter = 0
         checkpoints = []
+        val_perplexities = []
 
         for epoch in range(epochs):
             n_batches = len(self.train_ids) // self.batch_size
-
             for _ in range(n_batches):
                 X_batch, y_batch = self.get_batch(self.train_ids)
                 logits = self.model.forward(X_batch)
@@ -313,6 +313,7 @@ class NeuralNgramTrainer:
                 val_logits = self.model.forward(X_val)
                 val_loss, _ = self.model.cross_entropy_loss(val_logits, y_val)
                 val_losses.append(val_loss)
+                val_perplexities.append(np.exp(val_loss))
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
@@ -341,6 +342,19 @@ class NeuralNgramTrainer:
         # plotting and saving loss function plot
         # self.plot_loss(train_losses=losses, val_losses=val_losses)
         self.plot_perplexity()
+        # --- Plot val perplexity per epoch ---
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(val_perplexities, marker="o", label="Validation Perplexity")
+        ax.set_title("Validation Perplexity per Epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Perplexity")
+        ax.grid(True, linestyle="--", alpha=0.6)
+        ax.legend()
+
+        folder = self.checkpoint_dir
+        save_item(fig, folder, "val_perplexity_by_epoch.png", text_version=False)
+        plt.close(fig)
+
         return losses, val_losses
 
     def ensure_model_initialized(self):
