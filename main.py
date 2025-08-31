@@ -89,14 +89,11 @@ def run_generation(args):
         )
 
     if args.model == "gpt":
-        out = Generator(
-            model_path=args.model_path,
-            max_new_tokens=args.max_new_tokens,
-            prompt=args.prompt,
-            device=args.device,
-        )
+        # rely on the default checkpoint inside generator
+        gen = Generator(device=args.device)
+        text = gen.generate(args.prompt, max_new_tokens=args.max_new_tokens)
         print("\n=== Generated Text ===\n")
-        print(out)
+        print(text)
 
     elif args.model == "ngram":
         ngram_trainer = NGramTrainer(
