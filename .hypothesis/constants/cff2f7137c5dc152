@@ -1,0 +1,4 @@
+# file: C:\Users\aleru\OneDrive\Documents\Projects\u_projects\token-by-token-ale_branch\llm_project\utils\dataloader.py
+# hypothesis_version: 6.138.8
+
+['data/processed', 'data/raw', 'raw', 'test', 'train', 'validation']

@@ -1,3 +1,4 @@
+from llm_project.utils.file_manager import save_item, load_item
 import numpy as np
 import os
 import sys
@@ -6,11 +7,11 @@ from llm_project.utils.dataloader import load_shakespeare
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
-from llm_project.utils.file_manager import save_item, load_item
+
 
 def get_batch(data_ids, block_size, batch_size):
     """
-    Creates a batch of input sequences and corresponding target sequences 
+    Creates a batch of input sequences and corresponding target sequences
     from a list of token IDs.
 
     Args:
@@ -20,33 +21,37 @@ def get_batch(data_ids, block_size, batch_size):
 
     Returns:
         X (np.ndarray): array of shape (batch_size, block_size) containing input sequences.
-        y (np.ndarray): array of shape (batch_size, block_size) containing target sequences 
+        y (np.ndarray): array of shape (batch_size, block_size) containing target sequences
                         (inputs shifted by one token).
     """
     X, y = [], []
     for _ in range(batch_size):
         start_idx = np.random.randint(0, len(data_ids) - block_size - 1)
-        x_block = data_ids[start_idx: start_idx + block_size]
-        y_block = data_ids[start_idx + 1: start_idx + block_size + 1]
+        x_block = data_ids[start_idx : start_idx + block_size]
+        y_block = data_ids[start_idx + 1 : start_idx + block_size + 1]
 
         X.append(x_block)
         y.append(y_block)
 
     return np.array(X), np.array(y)
 
-class NeuralNgram:
 
+class NeuralNgram:
     def __init__(self, n, vocab_size, embedding_dim=32, seed=35):
         np.random.seed(seed)
         self.n = n
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
         # Initialize embedding matrix
-        self.embeddings = np.random.randn(vocab_size, embedding_dim) * 0.01 # (vocab_size, embedding_dim)
+        self.embeddings = (
+            np.random.randn(vocab_size, embedding_dim) * 0.01
+        )  # (vocab_size, embedding_dim)
         # Initialize weights and biases
         self.W = np.random.randn(embedding_dim, vocab_size)
         self.b = np.zeros((1, 1, vocab_size))
+
     # -------------- FORWARD / LOSS -----------------
+
     def forward(self, X):
         """
         Forward pass
@@ -65,7 +70,7 @@ class NeuralNgram:
         batch_embeddings = self.embeddings[X]  # (B, L, E)
         logits = batch_embeddings @ self.W + self.b  # (B, L, C)
         return logits
-    
+
     def cross_entropy_loss(self, logits, y):
         """
         Computes the cross-entropy loss and softmax probabilities given logits and target indices.
@@ -76,20 +81,23 @@ class NeuralNgram:
 
         Returns:
             loss (float): mean cross-entropy loss over the batch.
-            probs (np.ndarray): array of shape (batch_size, block_size, vocab_size), softmax probabilities 
+            probs (np.ndarray): array of shape (batch_size, block_size, vocab_size), softmax probabilities
             corresponding to logits.
         """
         B, L, _ = logits.shape
         # Substract the highest value from each logit of each sequence
-        exps = np.exp(logits - np.max(logits, axis=2, keepdims=True)) 
+        logits = logits.astype(np.float32)
+        exps = np.exp(logits - np.max(logits, axis=2, keepdims=True))
         exps_sum = np.sum(exps, axis=2, keepdims=True)
-        probs = exps / exps_sum # applying softmax, (batch_size, block_size, vocab_size)
+        # applying softmax, (batch_size, block_size, vocab_size)
+        probs = exps / exps_sum
         # extracting indexes of correct tokens for each position in each sequence
-        true_prob = probs[np.arange(B)[:, None], np.arange(L), y] # (batch_size, block_size)
+        # (batch_size, block_size)
+        true_prob = probs[np.arange(B)[:, None], np.arange(L), y]
         # cross-entropy loss: L = -1/N * Σ log(p(y_i))
         loss = -np.mean(np.log(true_prob + 1e-9))
         return loss, probs
-    
+
     # ---------------- BACKWARD ------------------
     def backward(self, X_batch, y_batch, probs, lr=0.01):
         """
@@ -115,7 +123,7 @@ class NeuralNgram:
         # gradient of cross entropy and softmax
         dZ = probs.copy()  # (B, L, C)
         dZ[np.arange(B)[:, None], np.arange(L), y_batch] -= 1
-        dZ /= (B * L)
+        dZ /= B * L
 
         # gradient of weights and biases
         batch_embeddings = self.embeddings[X_batch]  # (B, L, E)
@@ -141,11 +149,7 @@ class NeuralNgram:
         """
         Returns model parameters as a dictionary
         """
-        return {
-            "embeddings": self.embeddings,
-            "W": self.W,
-            "b": self.b
-        }
+        return {"embeddings": self.embeddings, "W": self.W, "b": self.b}
 
     def load_state_dict(self, state):
         """
@@ -155,10 +159,9 @@ class NeuralNgram:
         self.W = state["W"]
         self.b = state["b"]
 
-    
     #  ---------------- PLOTTING LOSS CURVE -------------------
+
     def plot_loss(self, train_losses, val_losses=None):
-        
         plt.figure(figsize=(8, 6))
         plt.plot(train_losses, label="Train loss", color="blue")
 
@@ -174,28 +177,32 @@ class NeuralNgram:
         plt.legend()
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.show()
-    # ---------------- GENERATION -------------------
-    def generate(self,
-                start_ids, 
-                id2token=None, 
-                max_new_tokens=20, 
-                stochastic=True,
-                stop_ids=None,
-                stop_words=None):
 
+    # ---------------- GENERATION -------------------
+
+    def generate(
+        self,
+        start_ids,
+        id2token=None,
+        max_new_tokens=20,
+        stochastic=True,
+        stop_ids=None,
+        stop_words=None,
+    ):
         generated_ids = list(start_ids.copy())
-        
+
         stop_ids = stop_ids or set()
         stop_words = stop_words or set()
 
         for _ in range(max_new_tokens):
-            context = generated_ids[-self.block_size:]
+            context = generated_ids[-self.block_size :]
             X = np.array(context, dtype=np.int64)[None, :]
             # generate logits
-            logits = self.forward(X)[0, -1] # Pick the last token of the first and only example
+            # Pick the last token of the first and only example
+            logits = self.forward(X)[0, -1]
 
             # Numerical stability
-            logits = (logits - np.max(logits))
+            logits = logits - np.max(logits)
 
             exps = np.exp(logits)
             probs = exps / exps.sum()
@@ -206,7 +213,7 @@ class NeuralNgram:
                 next_id = int(np.random.choice(self.vocab_size, p=probs))
             else:
                 next_id = int(np.argmax(probs))
-            
+
             generated_ids.append(next_id)
 
             if next_id in stop_ids:
@@ -217,7 +224,7 @@ class NeuralNgram:
         if id2token is not None:
             generated_tokens = [id2token[i] for i in generated_ids]
             return generated_ids, generated_tokens
-        
+
         return generated_ids
 
     # -------------- PERPLEXITY METRIC ------------------
@@ -231,22 +238,32 @@ class NeuralNgram:
         Returns:
             float: perplexity score (lower is better).
         """
-        X_batch, y_batch = get_batch(data_ids, block_size=self.block_size, batch_size=self.batch_size)
+        X_batch, y_batch = get_batch(
+            data_ids, block_size=self.block_size, batch_size=self.batch_size
+        )
         logits = self.forward(X_batch)
         loss, _ = self.cross_entropy_loss(logits, y_batch)
         return float(np.exp(loss))
 
+
 if __name__ == "__main__":
-    import os
     from llm_project.utils.token_mapping import token_id_mapping
     from llm_project.bpe.bytepair_encoding import BPE
 
     # ---------------- CONFIG -----------------
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    saved_models_dir = os.path.join(project_root, "experiments", "saved_models", "neural_ngram")
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    )
+    saved_models_dir = os.path.join(
+        project_root, "experiments", "saved_models", "neural_ngram"
+    )
     os.makedirs(saved_models_dir, exist_ok=True)
-    train_path = os.path.join(project_root, "data", "processed", "Shakespeare_clean_train.txt")
-    val_path   = os.path.join(project_root, "data", "processed", "Shakespeare_clean_valid.txt")
+    train_path = os.path.join(
+        project_root, "data", "processed", "Shakespeare_clean_train.txt"
+    )
+    val_path = os.path.join(
+        project_root, "data", "processed", "Shakespeare_clean_valid.txt"
+    )
 
     # N-gram model params
     n = 3
@@ -270,22 +287,25 @@ if __name__ == "__main__":
     # ---------------- TRAIN BPE -----------------
     bpe.BPE_encoder()
     print(f"DEBUG: Number of tokens after BPE: {len(bpe.tokens)}")
-    #bpe.plot_vocabulary_growth()
+    # bpe.plot_vocabulary_growth()
 
     # ---------------- CONVERT TEXT TO IDS -----------------
     # Build simple mapping token <-> id
     token2id, id2token, _ = token_id_mapping(bpe.tokens)
 
-
     # Encode training and validation text
     train_ids = [token2id[tok] for tok in bpe.tokens if tok in token2id]
     test_tokens = bpe.BPE_segmenter(bpe.test_text)
     val_ids = [token2id[tok] for tok in test_tokens if tok in token2id]
-    print(f"DEBUG: Length of train_ids: {len(train_ids)}, Length of val_ids: {len(val_ids)}")
+    print(
+        f"DEBUG: Length of train_ids: {len(train_ids)}, Length of val_ids: {len(val_ids)}"
+    )
     print(f"DEBUG: Sample of train_ids: {train_ids[:20]}")
 
     # ---------------- INITIALIZE MODEL -----------------
-    model = NeuralNgram(n=n, vocab_size=len(token2id), block_size=block_size, batch_size=batch_size)
+    model = NeuralNgram(
+        n=n, vocab_size=len(token2id), block_size=block_size, batch_size=batch_size
+    )
     print(f"DEBUG: Model initialized with vocab size {len(token2id)}")
     # ---------------- TRAIN MODEL -----------------
     print("DEBUG: Starting training...")
@@ -299,10 +319,11 @@ if __name__ == "__main__":
         max_checkpoints=3,
         patience=3,
         load_ckpt_name=None,
-        force_train=True
+        force_train=True,
     )
     print("DEBUG: Training finished")
     import glob
+
     ckpt_files = sorted(glob.glob(os.path.join(checkpoint_dir, "*.pkl")))
     if ckpt_files:
         last_ckpt = os.path.basename(ckpt_files[-1])
@@ -313,6 +334,8 @@ if __name__ == "__main__":
     # ---------------- GENERATE SAMPLE -----------------
     start_ids = train_ids[:block_size]
     stop_ids_set = {token2id[tok] for tok in ".?!" if tok in token2id}
-    generated_ids, generated_tokens = model.generate(start_ids=start_ids, max_new_tokens=20, id2token=id2token, stop_ids=stop_ids_set)
+    generated_ids, generated_tokens = model.generate(
+        start_ids=start_ids, max_new_tokens=20, id2token=id2token, stop_ids=stop_ids_set
+    )
     print("Generated token IDs:", generated_ids)
     print("Generated tokens:", generated_tokens)

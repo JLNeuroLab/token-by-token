@@ -1,6 +1,20 @@
 import torch
 import torch.nn as nn
 from llm_project.models.gpt.attention import CausalSelfAttention
+import math
+import matplotlib.pyplot as plt
+
+
+class Gelu(nn.Module):
+    def forward(self, x):
+        return (
+            0.5
+            * x
+            * (
+                1
+                + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3)))
+            )
+        )
 
 
 class FeedForward(nn.Module):
@@ -8,7 +22,7 @@ class FeedForward(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(config.embd_dim, 4 * config.embd_dim),
-            nn.GELU(),
+            Gelu(),
             nn.Linear(4 * config.embd_dim, config.embd_dim),
             nn.Dropout(config.dropout),
         )
@@ -75,3 +89,14 @@ class GPT(nn.Module):
 
     def eval(self):
         return super().eval()
+
+
+if __name__ == "__main__":
+    gelu = Gelu()
+    x = torch.linspace(-3, 3, steps=100)
+    y = gelu(x)
+
+    plt.plot(x.numpy(), y.detach().numpy())
+    plt.title("Custom GELU Activation")
+    plt.grid(True)
+    plt.show()
