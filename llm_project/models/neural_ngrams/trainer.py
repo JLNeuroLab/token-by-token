@@ -364,8 +364,8 @@ class NeuralNgramTrainer:
     
 if __name__ == "__main__":
     # --- Load dataset ---
-    train_text = load_shakespeare("train")[:10000]
-    valid_text = load_shakespeare("validation")[:1000]
+    train_text = load_shakespeare("train")
+    valid_text = load_shakespeare("validation")
 
     # --- Hyperparameters ---
     embedding_dim = 16
