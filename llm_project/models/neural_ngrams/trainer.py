@@ -366,23 +366,21 @@ class NeuralNgramTrainer:
 
     def generate(
         self,
-        start_ids=None,
-        prompt=None,
-        id2token=None,
-        max_new_tokens=20,
+        prompt,
+        max_new_tokens=100,
         stochastic=True,
-        stop_ids=None,
         stop_words=None,
+        batch_size=16,
+        block_size=8,
     ):
         self.ensure_model_initialized()
 
-        if start_ids is None:
-            if prompt is None:
-                raise ValueError("You should at least provide 'prompt' or 'start_ids'")
-            if self.bpe is None:
-                raise ValueError(
-                    f"{Colors.FAIL}[ERROR]{Colors.FAIL}BPE not initialized. Execute prepare_bpe() first."
-                )
+        if prompt is None:
+            raise ValueError("You should at least provide 'prompt' ")
+        if self.bpe is None:
+            raise ValueError(
+                f"{Colors.FAIL}[ERROR]{Colors.FAIL}BPE not initialized. Execute prepare_bpe() first."
+            )
             # Convert prompt in start_ids
             start_tokens = self.bpe.BPE_segmenter(normalize_text(prompt))
             start_ids = [
@@ -393,7 +391,8 @@ class NeuralNgramTrainer:
 
         generated_ids = list(start_ids.copy())
 
-        stop_ids = stop_ids or set()
+        stop_words = stop_words or set()
+
         stop_words = stop_words or set()
         vocab_size = self.model.embeddings.shape[0]
 
@@ -421,6 +420,10 @@ class NeuralNgramTrainer:
                 break
             if id2token is not None and id2token[next_id] in stop_words:
                 break
+
+            print(
+                f"[DEBUG] Generation with batch_size={batch_size}, block_size={block_size}"
+            )
 
         if self.bpe:
             generated_tokens = [self.bpe.id_to_token[i] for i in generated_ids]

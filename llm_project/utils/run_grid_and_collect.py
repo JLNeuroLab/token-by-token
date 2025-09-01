@@ -75,12 +75,15 @@ for model in MODELS:
     train_args = [
         "python",
         "main.py",
-        "train",
+        "generate",
         "--model",
         model,
         "--k",
         str(k),
-        "--force_retrain",
+        "--prompt",
+        "To be or not to be",
+        "--max_new_tokens",
+        "100",
         "--batch_size",
         str(batch_size),
         "--block_size",
@@ -120,4 +123,3 @@ with open(CSV_PATH, "w", newline="") as f:
     csv.writer(f).writerows(rows)
 
 print(f"\n {Colors.OKCYAN}Saved:{Colors.ENDC} {CSV_PATH}")
-

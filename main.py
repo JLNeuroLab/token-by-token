@@ -4,6 +4,7 @@ import torch
 import platform
 from shutil import get_terminal_size
 from llm_project.utils.dataloader import load_shakespeare
+from llm_project.bpe.bytepair_encoding import normalize_text
 
 # -------------- Imports for GPT ----------------
 from llm_project.models.gpt.train import main as GPT_Trainer
@@ -151,6 +152,15 @@ def run_generation(args):
         )
         print("\n=== Generated Text ===\n")
         print("".join(generated_tokens))
+        valid_text = "".join(load_shakespeare("validation"))
+        validation_tokens = ngram_trainer.bpe.BPE_segmenter(normalize_text(valid_text))
+
+        # Compute perplexity
+        best_lambdas = model.lambdas.get("best", [1 / model.n] * model.n)
+        val_ppl = ngram_trainer.compute_perplexity(validation_tokens, best_lambdas)
+
+        # Output in parseable format for automation
+        print(f"\nValidation perplexity: {val_ppl:.4f}")
 
     elif args.model == "neural":
         # Use real text so BPE can be built when cache is missing/invalid
@@ -207,8 +217,9 @@ def run_generation(args):
             max_new_tokens=args.max_new_tokens,
             stochastic=True,
             stop_words={".", "\n"},
+            batch_size=args.batch_size,
+            block_size=args.block_size,
         )
-
         print("\n=== Generated Text ===\n")
         print("".join(generated_tokens))
 
@@ -321,7 +332,7 @@ def main():
         default=None,
         help="Path to checkpoint (used only by GPT)",
     )
-    gen_parser.add_argument("--prompt", type=str, required=True)
+    gen_parser.add_argument("--prompt", type=str, default="To dream on the lake")
     gen_parser.add_argument("--max_new_tokens", type=int, default=100)
 
     gen_parser.add_argument(

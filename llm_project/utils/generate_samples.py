@@ -1,6 +1,7 @@
 import argparse
 import pathlib
 import subprocess
+from llm_project.utils.debugg_utils import Colors
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--k", type=int, required=True)
@@ -36,4 +37,4 @@ for model in MODELS:
     )
     path = OUTBASE / f"{model}_k{k}.txt"
     path.write_text(out)
-    print("✅", path)
+    print(f"{Colors.OKGREEN}[DONE]{Colors.ENDC}", path)
