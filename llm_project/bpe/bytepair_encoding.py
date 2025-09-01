@@ -11,6 +11,7 @@ import time
 import psutil
 import platform
 from llm_project.utils.debugg_utils import Colors
+from llm_project.utils.tracker import track
 
 
 # For tracking resources during merge steps
@@ -124,11 +125,13 @@ class BPE:
         self.token_to_id = {token: i for i, token in enumerate(vocab_list)}
         self.id_to_token = {i: token for token, i in self.token_to_id.items()}
 
+    @track(v=True)
     def encode(self, text_to_encode):
         """Encodes a string into a list of token IDs."""
         segmented_tokens = self.BPE_segmenter(text_to_encode)
         return [self.token_to_id.get(t, -1) for t in segmented_tokens]
 
+    @track(v=True)
     def decode(self, ids_to_decode):
         """Decodes a list of token IDs back into a string."""
         text = "".join([self.id_to_token.get(i, "") for i in ids_to_decode])
@@ -159,6 +162,7 @@ class BPE:
         return norm_text
 
     # -------------------Byte-Pair Encoding method-----------------------
+    @track(v=True)
     def BPE_encoder(self):
         """
         Perform byte-pair encoding algorithm over the input text
@@ -349,6 +353,7 @@ class BPE:
     # After applying the tokenizer to the test text, evaluate the performance by computing coverage:
     # coverage is defined by the number of tokens in the text, that the learned vocabulary from the training
     # can cover.
+    @track(v=True)
     def compute_coverage(self, text=None):
         if text is None:
             if self.test_text is None:

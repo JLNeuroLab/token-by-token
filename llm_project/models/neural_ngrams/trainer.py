@@ -2,11 +2,14 @@ import os
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-from llm_project.utils.dataloader import load_shakespeare
-from llm_project.utils.file_manager import save_item, load_item
 from llm_project.models.neural_ngrams.model import NeuralNgram
 from llm_project.bpe.bytepair_encoding import normalize_text, BPE
+
+# debugg utils
+from llm_project.utils.dataloader import load_shakespeare
+from llm_project.utils.file_manager import save_item, load_item
 from llm_project.utils.debugg_utils import Colors
+from llm_project.utils.tracker import track
 
 
 class NeuralNgramTrainer:
@@ -24,6 +27,7 @@ class NeuralNgramTrainer:
         block_size=4,
         embedding_dim=16,
         autoload=True,
+        val_ids=None,
     ):
         self.model = model
         self.n = n
@@ -50,9 +54,10 @@ class NeuralNgramTrainer:
         self.bpe = None
         self.merges = None
         self.train_ids = None
-        self.val_ids = None
+        self.val_ids = val_ids
         self.autoload = autoload
 
+    @track(v=True)
     def get_batch(self, data_ids):
         """
         Creates a batch of input sequences and corresponding target sequences
@@ -79,6 +84,7 @@ class NeuralNgramTrainer:
 
         return np.array(X), np.array(y)
 
+    @track(v=True)
     def save_checkpoint(self, folder, name, losses=None, val_losses=None):
         """
         Uses save_item for saving the  parameters of the model
@@ -95,6 +101,7 @@ class NeuralNgramTrainer:
         }
         save_item(state, folder_path=folder, name=name, text_version=False)
 
+    @track(v=True)
     def load_checkpoint(self, folder, name, base_dir=None):
         """
         Load a model checkpoint previously saved with save_checkpoint.
@@ -116,6 +123,7 @@ class NeuralNgramTrainer:
         print(f"Checkpoint loaded: {os.path.join(folder, name)}")
         return losses, val_losses
 
+    @track(v=True)
     def prepare_bpe(self, force_retrain=False, load_bpe_name=None):
         bpe_dir = os.path.join(self.root, "experiments", "saved_models", "neural_ngram")
         os.makedirs(bpe_dir, exist_ok=True)
@@ -155,6 +163,7 @@ class NeuralNgramTrainer:
         self.merges = self.bpe.merges
         print(f"BPE ready with {len(self.bpe.tokens)} tokens.")
 
+    @track(v=True)
     def plot_perplexity(
         self, train_ids=None, val_ids=None, folder=None, filename="perplexity_curve.png"
     ):
@@ -197,41 +206,48 @@ class NeuralNgramTrainer:
         save_item(fig, folder, filename, text_version=False)
         plt.close(fig)
 
+    @track(v=True)
     def compute_perplexity(self, data_ids):
         """
         Computes the perplexity of the model on a given dataset.
         """
+        if len(data_ids) < self.block_size + 1:
+            print("[WARNING] Not enough tokens to compute perplexity.")
+
         X_batch, y_batch = self.get_batch(data_ids)
         logits = self.model.forward(X_batch)
         loss, _ = self.model.cross_entropy_loss(logits, y_batch)
-        return float(np.exp(loss))
+        perplexity = float(np.exp(loss))
+        print(
+            f"[DEBUG] PPL: {perplexity:.4f} | Loss: {loss:.4f} | Logits: {logits.shape}"
+        )
+        return perplexity
 
+    @track(v=True)
     def fit(
         self,
-        batch_size=None,
-        block_size=None,
         epochs=3,
         lr=0.01,
+        patience=3,
         force_retrain=False,
         load_ckpt_name=None,
         load_bpe_name=None,
-        patience=3,
         max_checkpoints=3,
+        batch_size=None,
+        block_size=None,
     ):
-        """
-        Trains the neural ngram model using mini-batch SGD.
-        """
+        print(
+            f"[DEBUG] Starting neural training with batch_size={self.batch_size}, block_size={self.block_size}"
+        )
 
         if batch_size is not None:
             self.batch_size = batch_size
         if block_size is not None:
             self.block_size = block_size
 
-        # ---------------- PATHS ----------------------
         ckpt_dir = self.checkpoint_dir
         os.makedirs(ckpt_dir, exist_ok=True)
 
-        # ---------------- BPE -----------------------
         self.prepare_bpe(load_bpe_name=load_bpe_name, force_retrain=force_retrain)
 
         if self.model is None or self.model.vocab_size != len(self.bpe.tokens):
@@ -242,13 +258,10 @@ class NeuralNgramTrainer:
                 embedding_dim=self.embedding_dim,
             )
 
-        # ---------------- Convert texts to IDs ----------------
-
         def text_to_ids(text_list):
             ids = []
             for t in text_list:
                 tokens = self.bpe.BPE_segmenter(normalize_text(t))
-                # Solo token già presenti nel vocabolario
                 ids.extend(
                     [
                         self.bpe.token_to_id[tok]
@@ -261,11 +274,9 @@ class NeuralNgramTrainer:
         self.train_ids = text_to_ids(self.train_text)
         self.val_ids = text_to_ids(self.valid_text) if self.valid_text else None
 
-        # ------------------- Automatic checkpoint loading -------------------
         if self.autoload and not force_retrain:
             ckpts = glob.glob(os.path.join(self.checkpoint_dir, "*.pkl"))
             ckpts = [ckpt for ckpt in ckpts if "BPE" not in os.path.basename(ckpt)]
-
             if ckpts:
                 ckpts = sorted(ckpts, key=lambda x: os.path.getmtime(x), reverse=True)
                 load_ckpt_name = os.path.basename(ckpts[0])
@@ -276,9 +287,7 @@ class NeuralNgramTrainer:
                     losses, val_losses = self.load_checkpoint(
                         self.checkpoint_dir, load_ckpt_name
                     )
-                    # Stop immediately if no training data (generation-only mode)
                     return losses, val_losses
-
                 except Exception as e:
                     print(f"Error loading checkpoint: {e}. Initializing a new model.")
             else:
@@ -286,7 +295,6 @@ class NeuralNgramTrainer:
                     f"No checkpoints found in {self.checkpoint_dir}. Initializing a new model."
                 )
 
-        # ---------------- TRAINING LOOP -------------------
         losses, val_losses = [], []
         best_val_loss = float("inf")
         step = 0
@@ -296,6 +304,8 @@ class NeuralNgramTrainer:
 
         for epoch in range(epochs):
             n_batches = len(self.train_ids) // self.batch_size
+            print(f"[DEBUG] Epoch {epoch + 1}/{epochs} starting...")
+
             for _ in range(n_batches):
                 X_batch, y_batch = self.get_batch(self.train_ids)
                 logits = self.model.forward(X_batch)
@@ -307,7 +317,6 @@ class NeuralNgramTrainer:
                     print(f"epoch {epoch + 1}/{epochs}, step {step}, loss: {loss:.4f}")
                 step += 1
 
-            # ---------------- VALIDATION -------------------
             if self.val_ids:
                 X_val, y_val = self.get_batch(self.val_ids)
                 val_logits = self.model.forward(X_val)
@@ -327,7 +336,6 @@ class NeuralNgramTrainer:
                     )
                     checkpoints.append((val_loss, ckpt_path))
                     checkpoints.sort(key=lambda x: x[0])
-
                     if len(checkpoints) > max_checkpoints:
                         _, worst_ckpt = checkpoints.pop(-1)
                         os.remove(os.path.join(self.checkpoint_dir, worst_ckpt))
@@ -339,10 +347,8 @@ class NeuralNgramTrainer:
                 if patience_counter >= patience:
                     print("Early stopping triggered")
                     return losses, val_losses
-        # plotting and saving loss function plot
-        # self.plot_loss(train_losses=losses, val_losses=val_losses)
+
         self.plot_perplexity()
-        # --- Plot val perplexity per epoch ---
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.plot(val_perplexities, marker="o", label="Validation Perplexity")
         ax.set_title("Validation Perplexity per Epoch")
@@ -350,13 +356,13 @@ class NeuralNgramTrainer:
         ax.set_ylabel("Perplexity")
         ax.grid(True, linestyle="--", alpha=0.6)
         ax.legend()
-
         folder = self.checkpoint_dir
         save_item(fig, folder, "val_perplexity_by_epoch.png", text_version=False)
         plt.close(fig)
 
         return losses, val_losses
 
+    @track()
     def ensure_model_initialized(self):
         if self.model is None:
             vocab_size = len(self.bpe.tokens)
@@ -364,6 +370,7 @@ class NeuralNgramTrainer:
                 n=self.n, vocab_size=vocab_size, embedding_dim=self.embedding_dim
             )
 
+    @track(v=True)
     def generate(
         self,
         prompt,
@@ -376,31 +383,35 @@ class NeuralNgramTrainer:
         self.ensure_model_initialized()
 
         if prompt is None:
-            raise ValueError("You should at least provide 'prompt' ")
+            raise ValueError("You should at least provide 'prompt'")
         if self.bpe is None:
             raise ValueError(
                 f"{Colors.FAIL}[ERROR]{Colors.FAIL}BPE not initialized. Execute prepare_bpe() first."
             )
-            # Convert prompt in start_ids
-            start_tokens = self.bpe.BPE_segmenter(normalize_text(prompt))
-            start_ids = [
-                self.bpe.token_to_id[tok]
-                for tok in start_tokens
-                if tok in self.bpe.token_to_id
-            ]
+
+        # --- Convert prompt into start_ids ---
+        start_tokens = self.bpe.BPE_segmenter(normalize_text(prompt))
+        start_ids = [
+            self.bpe.token_to_id[tok]
+            for tok in start_tokens
+            if tok in self.bpe.token_to_id
+        ]
 
         generated_ids = list(start_ids.copy())
 
+        # --- Convert stop_words to stop_ids ---
         stop_words = stop_words or set()
+        stop_ids = set(
+            self.bpe.token_to_id[word]
+            for word in stop_words
+            if word in self.bpe.token_to_id
+        )
 
-        stop_words = stop_words or set()
         vocab_size = self.model.embeddings.shape[0]
 
-        for _ in range(max_new_tokens):
-            context = generated_ids[-self.block_size :]
+        for s in range(max_new_tokens):
+            context = generated_ids[-block_size:]
             X = np.array(context, dtype=np.int64)[None, :]
-            # generate logits
-            # Pick the last token of the first and only example
             logits = self.model.forward(X)[0, -1]
 
             # Numerical stability
@@ -408,29 +419,71 @@ class NeuralNgramTrainer:
 
             exps = np.exp(logits)
             probs = exps / exps.sum()
+
             assert len(probs) == vocab_size, f"{len(probs)} vs {vocab_size}"
-            if stochastic:
-                next_id = int(np.random.choice(vocab_size, p=probs))
-            else:
-                next_id = int(np.argmax(probs))
+
+            next_id = (
+                int(np.random.choice(vocab_size, p=probs))
+                if stochastic
+                else int(np.argmax(probs))
+            )
 
             generated_ids.append(next_id)
 
             if next_id in stop_ids:
                 break
-            if id2token is not None and id2token[next_id] in stop_words:
-                break
 
+            if s % 50 == 0:
+                print(
+                    f"[DEBUG] Generation step:{s} with batch_size={batch_size}, block_size={block_size}"
+                )
+
+        # if self.bpe:
+        #     generated_tokens = [self.bpe.id_to_token[i] for i in generated_ids]
+        #     generated_text = " ".join(generated_tokens).replace("_", "")
+        #
+        #     if self.val_ids is not None:
+        #         val_ppl = self.compute_perplexity(self.val_ids)
+        #         print(f"\nValidation perplexity: {val_ppl:.4f}")
+        #     else:
+        #         print(
+        #             "\n[WARNING] Validation IDs are not available. Skipping perplexity computation."
+        #         )
+        #         print("Validation perplexity: -1")
+        #
+        #     return generated_ids, generated_text
+        #
+        # return generated_ids, []
+        # --- Compute perplexity
+        # If val_ids is not set, generate it from valid_text
+        if self.val_ids is None and self.valid_text:
+            print("[DEBUG] Reconstructing val_ids from valid_text...")
+
+            def text_to_ids(text_list):
+                ids = []
+                for text in text_list:
+                    tokens = self.bpe.BPE_segmenter(normalize_text(text))
+                    ids.extend([self.bpe.token_to_id.get(tok, -1) for tok in tokens])
+                return [i for i in ids if i >= 0]  # filter out unknowns
+
+            self.val_ids = text_to_ids(self.valid_text)
+            print(f"[DEBUG] Reconstructed val_ids with {len(self.val_ids)} tokens.")
+            print(f"[DEBUG] First 10 val_ids: {self.val_ids[:10]}")
+
+        if self.val_ids:
+            val_ppl = self.compute_perplexity(self.val_ids)
+            print(f"\nValidation perplexity: {val_ppl:.4f}")
+        else:
             print(
-                f"[DEBUG] Generation with batch_size={batch_size}, block_size={block_size}"
+                "[WARNING] Validation IDs are not available. Skipping perplexity computation."
             )
+            print("Validation perplexity: NaN")
 
-        if self.bpe:
-            generated_tokens = [self.bpe.id_to_token[i] for i in generated_ids]
-            generated_text = " ".join(generated_tokens).replace("_", "")
-            return generated_ids, generated_text
+        # --- Decode generated token IDs into string ---
+        generated_text = self.bpe.decode(generated_ids) if self.bpe else ""
 
-        return generated_ids
+        # --- Return token IDs and final string ---
+        return generated_ids, generated_text
 
 
 if __name__ == "__main__":

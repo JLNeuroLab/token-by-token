@@ -56,7 +56,7 @@ def run(cmd, output_path=None):
 
 
 def parse_metrics(model, stdout):
-    m = re.search(r"Validation perplexity:\s*([0-9.]+)", stdout, re.I)
+    m = re.search(r"Validation perplexity: (-?[\d.]+)", stdout)
     if m:
         return float(m.group(1))
     m = re.search(r"Validation loss:\s*([0-9.]+)", stdout, re.I)
