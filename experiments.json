@@ -1,0 +1,128 @@
+
+[
+    {
+        "name": "A_Baseline",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "B_Embedding_Sweep_64",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 64,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "B_Embedding_Sweep_256",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 256,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "B_Embedding_Sweep_384",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 384,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "C_Layer_Sweep_2",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 2,
+            "dropout": 0.2,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "C_Layer_Sweep_6",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 6,
+            "dropout": 0.2,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "D_Dropout_Sweep_0.1",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.1,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "D_Dropout_Sweep_0.3",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.3,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "E_LearningRate_Sweep_Low",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "learning_rate": 0.0001,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "E_LearningRate_Sweep_High",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "learning_rate": 0.0006,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "F_BlockSize_Sweep_128",
+        "params": {
+            "max_iters": 5000,
+            "embd_dim": 128,
+            "n_layer": 4,
+            "dropout": 0.2,
+            "block_size": 128,
+            "max_k": 200
+        }
+    },
+    {
+        "name": "Z_Long_Training_Best_Guess",
+        "params": {
+            "max_iters": 15000,
+            "embd_dim": 256,
+            "n_layer": 6,
+            "dropout": 0.2,
+            "max_k": 200
+        }
+    }
+]
+
+

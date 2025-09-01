@@ -3,12 +3,19 @@ import os
 import torch
 import platform
 from shutil import get_terminal_size
-from llm_project.utils.dataloader import load_shakespeare
+
+# -------------- Imports FROM BPE ----------------
 from llm_project.bpe.bytepair_encoding import normalize_text
+from llm_project.bpe.bytepair_encoding import BPE
+
+# -------------- Imports FROM utils ----------------
+from llm_project.utils.dataloader import load_item
+from llm_project.utils.dataloader import load_shakespeare
 
 # -------------- Imports for GPT ----------------
 from llm_project.models.gpt.train import main as GPT_Trainer
 from llm_project.models.gpt.generator import Generator
+from llm_project.models.gpt.model import GPT
 
 # -------------- Imports for ngram --------------------
 from llm_project.models.ngrams.trainer import NGramTrainer
@@ -91,55 +98,56 @@ def run_generation(args):
 
     if args.model == "gpt":
         # normalize device strings ('gpu' -> 'cuda')
+        # Normalize device string
         dev = args.device
-        if isinstance(dev, str) and dev.lower() == "gpu":
+        if dev.lower() == "gpu":
             dev = "cuda"
         if dev not in ("cuda", "cpu"):
             dev = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # 1) Try the simplest constructor first
-        try:
-            gen = Generator()
-        except TypeError:
-            # 2) Try a couple of common alt signatures; ignore unknown kwargs
-            gen = None
-            for kw in (
-                {"ckpt_path": args.model_path},
-                {"checkpoint": args.model_path},
-                {},
-            ):
-                try:
-                    gen = Generator(**{k: v for k, v in kw.items() if v})
-                    break
-                except TypeError:
-                    continue
-            if gen is None:
-                raise  # let Python show the real error if nothing worked
+        # Load model + tokenizer
+        checkpoint_path = args.model_path or "experiments/saved_models/gpt_final.pt"
+        bpe_path = "experiments/bpe_results/train_final_vocab.pkl"
 
-        # Move underlying model to the desired device if possible
-        for attr in ("model", "net", "gpt", "lm"):
-            m = getattr(gen, attr, None)
-            if hasattr(m, "to"):
-                m.to(dev)
-                break
+        model = torch.load(checkpoint_path, map_location=dev)
+        model.eval()
+        tokenizer = load_item(bpe_path)
+        gen = Generator(model, tokenizer)
 
-        # If the generator exposes a loader and a custom path was provided, use it
-        if args.model_path and hasattr(gen, "load"):
-            try:
-                gen.load(args.model_path)
-            except Exception:
-                pass  # optional: log a warning
+        # Move model to target device
+        model.to(dev)
 
-        # Generate
-        if hasattr(gen, "generate"):
-            out = gen.generate(args.prompt, max_new_tokens=args.max_new_tokens)
-        else:
-            # Some implementations make the instance callable
-            out = gen(args.prompt, max_new_tokens=args.max_new_tokens)
-
+        # Generate from prompt
+        out = gen.generate(args.prompt, max_new_tokens=args.max_new_tokens)
         print("\n=== Generated Text ===\n")
         print(out)
 
+        # ---------------- Evaluate GPT on validation split ----------------
+        valid_text = "".join(load_shakespeare("validation"))
+        val_tokens = tokenizer.BPE_segmenter(normalize_text(valid_text))
+        val_ids = torch.tensor(
+            [tokenizer.token_to_id.get(tok, 0) for tok in val_tokens],
+            dtype=torch.long,
+            device=dev,
+        )
+
+        # Mini perplexity eval (first batch only)
+        BLOCK_SIZE = args.block_size or 64
+        if len(val_ids) < BLOCK_SIZE + 1:
+            print("[WARNING] Not enough tokens for PPL evaluation.")
+            print("Validation perplexity: NaN")
+        else:
+            x = val_ids[:BLOCK_SIZE].unsqueeze(0)
+            y = val_ids[1 : BLOCK_SIZE + 1].unsqueeze(0)
+            with torch.no_grad():
+                logits = model(x)
+                loss = torch.nn.functional.cross_entropy(
+                    logits.view(-1, logits.size(-1)),
+                    y.view(-1),
+                    reduction="mean",
+                )
+                val_ppl = torch.exp(loss).item()
+                print(f"\nValidation perplexity: {val_ppl:.4f}")
     elif args.model == "ngram":
         ngram_trainer = NGramTrainer(
             model=None, tokens=None, n=args.n, max_k=args.max_k
@@ -378,7 +386,7 @@ def main():
         exit(1)
 
     args = parser.parse_args()
-    welcome_banner()
+    # welcome_banner()
     args.func(args)
 
 
