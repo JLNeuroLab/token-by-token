@@ -89,11 +89,55 @@ def run_generation(args):
         )
 
     if args.model == "gpt":
-        # rely on the default checkpoint inside generator
-        gen = Generator(device=args.device)
-        text = gen.generate(args.prompt, max_new_tokens=args.max_new_tokens)
+        # normalize device strings ('gpu' -> 'cuda')
+        dev = args.device
+        if isinstance(dev, str) and dev.lower() == "gpu":
+            dev = "cuda"
+        if dev not in ("cuda", "cpu"):
+            dev = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # 1) Try the simplest constructor first
+        try:
+            gen = Generator()
+        except TypeError:
+            # 2) Try a couple of common alt signatures; ignore unknown kwargs
+            gen = None
+            for kw in (
+                {"ckpt_path": args.model_path},
+                {"checkpoint": args.model_path},
+                {},
+            ):
+                try:
+                    gen = Generator(**{k: v for k, v in kw.items() if v})
+                    break
+                except TypeError:
+                    continue
+            if gen is None:
+                raise  # let Python show the real error if nothing worked
+
+        # Move underlying model to the desired device if possible
+        for attr in ("model", "net", "gpt", "lm"):
+            m = getattr(gen, attr, None)
+            if hasattr(m, "to"):
+                m.to(dev)
+                break
+
+        # If the generator exposes a loader and a custom path was provided, use it
+        if args.model_path and hasattr(gen, "load"):
+            try:
+                gen.load(args.model_path)
+            except Exception:
+                pass  # optional: log a warning
+
+        # Generate
+        if hasattr(gen, "generate"):
+            out = gen.generate(args.prompt, max_new_tokens=args.max_new_tokens)
+        else:
+            # Some implementations make the instance callable
+            out = gen(args.prompt, max_new_tokens=args.max_new_tokens)
+
         print("\n=== Generated Text ===\n")
-        print(text)
+        print(out)
 
     elif args.model == "ngram":
         ngram_trainer = NGramTrainer(
@@ -217,7 +261,13 @@ def main():
         help="Which model to train: gpt | ngram | neural",
     )
 
-    train_parser.add_argument("--max_k", type=int, default=2000)
+    train_parser.add_argument(
+        "--max_k",
+        "--k",
+        type=int,
+        default=1000,
+        help="BPE merges (k)",
+    )
     train_parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -244,7 +294,7 @@ def main():
     )
 
     # neural ngram args
-    train_parser.add_argument("--batch_size", type=int, default=32)
+    train_parser.add_argument("--batch_size", type=int, default=16)
     train_parser.add_argument("--block_size", type=int, default=8)
     train_parser.add_argument("--embedding_dim", type=int, default=16)
     train_parser.add_argument("--epochs", type=int, default=5)
@@ -273,8 +323,12 @@ def main():
     )
     gen_parser.add_argument("--prompt", type=str, required=True)
     gen_parser.add_argument("--max_new_tokens", type=int, default=100)
+
     gen_parser.add_argument(
-        "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
+        "--device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else "cpu",
+        help="Use 'cuda' or 'cpu' (alias: 'gpu' is accepted).",
     )
 
     # Ngram args
@@ -285,6 +339,7 @@ def main():
     # Neural NGram args
     gen_parser.add_argument(
         "--max_k",
+        "--k",
         type=int,
         default=2000,
         help="Maximum context size / k for NGram or Neural NGram",
@@ -366,12 +421,12 @@ def print_args_for_model(args):
 
 def welcome_banner():
     banner = r"""
-  ______      __                 __             ______      __            
- /_  __/___  / /_____  ____     / /_  __  __   /_  __/___  / /_____  ____ 
+  ______      __                 __             ______      __
+ /_  __/___  / /_____  ____     / /_  __  __   /_  __/___  / /_____  ____
   / / / __ \/ //_/ _ \/ __ \   / __ \/ / / /    / / / __ \/ //_/ _ \/ __ \
  / / / /_/ / ,< /  __/ / / /  / /_/ / /_/ /    / / / /_/ / ,< /  __/ / / /
-/_/  \____/_/|_|\___/_/ /_/  /_.___/\__, /    /_/  \____/_/|_|\___/_/ /_/ 
-                                    /____/                                    
+/_/  \____/_/|_|\___/_/ /_/  /_.___/\__, /    /_/  \____/_/|_|\___/_/ /_/
+                                    /____/
     """
 
     term_width = get_terminal_size().columns

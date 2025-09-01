@@ -86,6 +86,7 @@ class NeuralNgram:
         """
         B, L, _ = logits.shape
         # Substract the highest value from each logit of each sequence
+        logits = logits.astype(np.float32)
         exps = np.exp(logits - np.max(logits, axis=2, keepdims=True))
         exps_sum = np.sum(exps, axis=2, keepdims=True)
         # applying softmax, (batch_size, block_size, vocab_size)
