@@ -57,7 +57,6 @@ class NeuralNgramTrainer:
         self.val_ids = val_ids
         self.autoload = autoload
 
-    @track(v=True)
     def get_batch(self, data_ids):
         """
         Creates a batch of input sequences and corresponding target sequences

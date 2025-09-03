@@ -1,8 +1,11 @@
+from pathlib import Path
 import argparse
 import os
 import torch
 import platform
+import re
 from shutil import get_terminal_size
+from configs.gpt_config import GPTCustomConfig  # Config import
 
 # -------------- Imports FROM BPE ----------------
 from llm_project.bpe.bytepair_encoding import normalize_text
@@ -40,6 +43,7 @@ def run_training(args):
             max_k=args.max_k,
             device=args.device,
             force_retrain=args.force_retrain,
+            block_size=args.block_size,
         )
     elif args.model == "ngram":
         ngram_trainer = NGramTrainer(
@@ -106,19 +110,112 @@ def run_generation(args):
             dev = "cuda" if torch.cuda.is_available() else "cpu"
 
         # Load model + tokenizer
-        checkpoint_path = args.model_path or "experiments/saved_models/gpt_final.pt"
-        bpe_path = "experiments/bpe_results/train_final_vocab.pkl"
 
-        model = torch.load(checkpoint_path, map_location=dev)
+        tokenizer = None
+
+        # First, try to load the BPE files saved directly with the model checkpoint
+        model_save_dir = Path("experiments/saved_models")
+        frozen_vocab_path = model_save_dir / f"gpt_vocab_k{args.max_k}.pkl"
+        frozen_merges_path = model_save_dir / f"gpt_merges_k{args.max_k}.pkl"
+
+        if frozen_vocab_path.exists() and frozen_merges_path.exists():
+            print(f"[INFO] Loading frozen BPE tokenizer for k={args.max_k}")
+            tokenizer = BPE(data_path=None, max_k=args.max_k)
+            tokenizer.vocab = load_item(str(model_save_dir), frozen_vocab_path.name)
+            tokenizer.merges = load_item(str(model_save_dir), frozen_merges_path.name)
+            tokenizer.build_token_mappings()
+
+        # If frozen tokenizer not found, fall back to the old method
+        # if tokenizer is None:
+        #     print("[WARN] Frozen BPE not found. Falling back to shared BPE cache.")
+        #     bpe_folder = Path("experiments/bpe_results")
+        #     fallback_folder = bpe_folder / "train_results"
+        #
+        #     for folder in [bpe_folder, fallback_folder]:
+        #         vocab_path = folder / "train_final_vocab.pkl"
+        #         merges_path = folder / "train_bpe_merges.pkl"
+        #         if vocab_path.exists() and merges_path.exists():
+        #             tokenizer = BPE(data_path=None, max_k=args.max_k)
+        #             tokenizer.vocab = load_item(str(folder), "train_final_vocab.pkl")
+        #             tokenizer.merges = load_item(str(folder), "train_bpe_merges.pkl")
+        #             tokenizer.build_token_mappings()
+        #             break
+        #
+        # if tokenizer is None:
+        #     raise FileNotFoundError(
+        #         f"Could not find required BPE vocab and merges files."
+        #     )
+
+        checkpoint_path = args.model_path or os.path.join(
+            "experiments", "saved_models", f"gpt_final_k{args.max_k}.pt"
+        )
+
+        # (args.model_path or f"experiments/saved_models/gpt_final_k{args.max_k}.pt")
+        bpe_folder = Path("experiments/bpe_results")
+        bpe_filename = "train_final_vocab.pkl"
+        fallback_folder = bpe_folder / "train_results"
+
+        for folder in [bpe_folder, fallback_folder]:
+            vocab_path = folder / "train_final_vocab.pkl"
+            merges_path = folder / "train_bpe_merges.pkl"
+            if vocab_path.exists() and merges_path.exists():
+                tokenizer = BPE(data_path=None, max_k=args.max_k)
+                tokenizer.vocab = load_item(str(folder), "train_final_vocab.pkl")
+                tokenizer.merges = load_item(str(folder), "train_bpe_merges.pkl")
+                tokenizer.build_token_mappings()
+                break
+        else:
+            # bpe_folder = "experiments/bpe_results"  # Corrected
+            raise FileNotFoundError(
+                f"Could not find both vocab and merges in {bpe_folder} or {fallback_folder}"
+            )
+
+        # bpe_filename = "train_final_vocab.pkl"  # Corrected
+        # # bpe_path = "experiments/bpe_results/train_final_vocab.pkl"
+        # tokenizer = load_item(bpe_folder, bpe_filename)
+
+        # # model configuration with the "best" hyperparameters
+        # config = GPTCustomConfig(
+        #     vocab_size=len(tokenizer.token_to_id),
+        #     embd_dim=384,
+        #     n_layer=4,
+        #     dropout=0.2,
+        #     block_size=64,
+        # )
+        # model configuration from CLI (defaults match your small checkpoint)
+        config = GPTCustomConfig(
+            vocab_size=len(tokenizer.token_to_id),
+            embd_dim=args.embd_dim,
+            n_layer=args.n_layer,
+            dropout=args.dropout,
+            block_size=args.block_size,
+        )
+
+        # Initiate model and Load the saved weights into the model structure
+        model = GPT(config)
+        state_dict = torch.load(checkpoint_path, map_location=dev)
+        model.load_state_dict(state_dict)
+
         model.eval()
-        tokenizer = load_item(bpe_path)
         gen = Generator(model, tokenizer)
 
         # Move model to target device
         model.to(dev)
 
         # Generate from prompt
-        out = gen.generate(args.prompt, max_new_tokens=args.max_new_tokens)
+        prompt_ids = tokenizer.BPE_segmenter(args.prompt)
+        prompt_ids = [tokenizer.token_to_id.get(tok, 0) for tok in prompt_ids]
+
+        # Generate continuation
+        # generated_ids = gen.generate(prompt_ids, max_new_tokens=args.max_new_tokens)
+
+        # generated_ids = gen.generate(prompt_ids)
+        # out = gen.generate(prompt_ids)
+        # out = tokenizer.decode(generated_ids)
+
+        generated_ids = gen.generate(prompt_ids)
+        out = tokenizer.decode(generated_ids)
+
         print("\n=== Generated Text ===\n")
         print(out)
 
@@ -148,6 +245,7 @@ def run_generation(args):
                 )
                 val_ppl = torch.exp(loss).item()
                 print(f"\nValidation perplexity: {val_ppl:.4f}")
+
     elif args.model == "ngram":
         ngram_trainer = NGramTrainer(
             model=None, tokens=None, n=args.n, max_k=args.max_k
@@ -219,7 +317,13 @@ def run_generation(args):
             raise RuntimeError(
                 "BPE vocab is still empty after rebuild; aborting generation."
             )
-
+        # (NEW) If a trained checkpoint path is provided, load it now
+        if getattr(args, "neural_ckpt", None):
+            nngram_trainer.ensure_model_initialized()  # create model with current vocab
+            ckpt_dir = nngram_trainer.checkpoint_dir
+            ckpt_name = os.path.basename(args.neural_ckpt)
+            nngram_trainer.load_checkpoint(ckpt_dir, ckpt_name)
+            print(f"[INFO] Loaded neural-ngram checkpoint: {args.neural_ckpt}")
         generated_ids, generated_tokens = nngram_trainer.generate(
             prompt=args.prompt,
             max_new_tokens=args.max_new_tokens,
@@ -284,7 +388,7 @@ def main():
         "--max_k",
         "--k",
         type=int,
-        default=1000,
+        default=200,
         help="BPE merges (k)",
     )
     train_parser.add_argument(
@@ -292,10 +396,10 @@ def main():
     )
 
     # GPT args
-    train_parser.add_argument("--max_iters", type=int, default=8000)
-    train_parser.add_argument("--embd_dim", type=int, default=128)
+    train_parser.add_argument("--max_iters", type=int, default=5000)
+    train_parser.add_argument("--embd_dim", type=int, default=384)
     train_parser.add_argument("--n_layer", type=int, default=4)
-    train_parser.add_argument("--dropout", type=float, default=0.1)
+    train_parser.add_argument("--dropout", type=float, default=0.2)
 
     # ngram args
     train_parser.add_argument("--n", type=int, default=3, help="Order of the n-gram")
@@ -340,6 +444,12 @@ def main():
         default=None,
         help="Path to checkpoint (used only by GPT)",
     )
+    gen_parser.add_argument(
+        "--neural_ckpt",
+        type=str,
+        default=None,
+        help="Neural NGram .pkl to load before generating (e.g. experiments/saved_models/neural_ngram/val=2.8311_epoch=1.pkl)",
+    )
     gen_parser.add_argument("--prompt", type=str, default="To dream on the lake")
     gen_parser.add_argument("--max_new_tokens", type=int, default=100)
 
@@ -349,6 +459,10 @@ def main():
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Use 'cuda' or 'cpu' (alias: 'gpu' is accepted).",
     )
+    gen_parser.add_argument("--dropout", type=float, default=0.2)
+    # GPT-specific (keep defaults aligned with your trained checkpoint)
+    gen_parser.add_argument("--embd_dim", type=int, default=384)
+    gen_parser.add_argument("--n_layer", type=int, default=4)
 
     # Ngram args
     gen_parser.add_argument(
@@ -440,11 +554,11 @@ def print_args_for_model(args):
 
 def welcome_banner():
     banner = r"""
-  ______      __                 __             ______      __
- /_  __/___  / /_____  ____     / /_  __  __   /_  __/___  / /_____  ____
-  / / / __ \/ //_/ _ \/ __ \   / __ \/ / / /    / / / __ \/ //_/ _ \/ __ \
- / / / /_/ / ,< /  __/ / / /  / /_/ / /_/ /    / / / /_/ / ,< /  __/ / / /
-/_/  \____/_/|_|\___/_/ /_/  /_.___/\__, /    /_/  \____/_/|_|\___/_/ /_/
+  ______      __                 __            ______      __
+ /_  __/___  / /_____  ____     / /_  __  __  /_  __/___  / /_____  ____
+  / / / __ \/ //_/ _ \/ __ \   / __ \/ / / /   / / / __ \/ //_/ _ \/ __ \
+ / / / /_/ / ,< /  __/ / / /  / /_/ / /_/ /   / / / /_/ / ,< /  __/ / / /
+/_/  \____/_/|_|\___/_/ /_/  /_.___/\__, /   /_/  \____/_/|_|\___/_/ /_/
                                     /____/
     """
 

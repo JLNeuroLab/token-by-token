@@ -5,6 +5,8 @@ import pathlib
 import re
 import subprocess
 from llm_project.utils.debugg_utils import Colors
+import glob
+import os
 
 # --------------------
 # Argparse CLI Options
@@ -26,6 +28,13 @@ MODELS = ["ngram", "neural", "gpt"]
 OUTDIR = pathlib.Path("experiments/summary")
 OUTDIR.mkdir(parents=True, exist_ok=True)
 CSV_PATH = OUTDIR / f"ppl_table_k{k}.csv"
+
+
+HP_GPT = {
+    200: dict(embd_dim=384, n_layer=4, dropout=0.2, block_size=64),
+    800: dict(embd_dim=384, n_layer=4, dropout=0.2, block_size=64),
+    2000: dict(embd_dim=384, n_layer=4, dropout=0.2, block_size=64),
+}
 
 # --------------------
 # Subprocess runner
@@ -65,6 +74,18 @@ def parse_metrics(model, stdout):
     raise RuntimeError(f"Couldn't parse PPL for {model}. Output:\n{stdout}")
 
 
+def best_neural_ckpt():
+    files = glob.glob("experiments/saved_models/neural_ngram/val=*.pkl")
+    if not files:
+        return None
+
+    def val_of(p):
+        m = re.search(r"val=([0-9.]+)", os.path.basename(p))
+        return float(m.group(1)) if m else float("inf")
+
+    return min(files, key=val_of)
+
+
 # --------------------
 # Run experiments
 # --------------------
@@ -89,6 +110,11 @@ for model in MODELS:
         "--block_size",
         str(block_size),
     ]
+    if model == "neural":
+        ckpt = best_neural_ckpt()
+        if ckpt:
+            train_args += ["--neural_ckpt", ckpt]
+
     run(train_args)
 
     # --- Generate ---
@@ -110,6 +136,10 @@ for model in MODELS:
         "--block_size",
         str(block_size),
     ]
+    if model == "neural":
+        ckpt = best_neural_ckpt()
+        if ckpt:
+            generate_args += ["--neural_ckpt, ckpt"]
     stdout = run(generate_args, output_path=output_path)
 
     # --- Parse metrics ---

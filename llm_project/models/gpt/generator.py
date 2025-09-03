@@ -84,7 +84,7 @@ class Generator:
         prob = self.softmax(logits)
         return np.random.choice(len(prob), p=prob)
 
-    def generate(self, context_ids, seed=None):
+    def generate(self, context_ids, max_new_tokens=None, seed=None):
         """
         Generate a sequence of token IDs based on the input context.
 
@@ -122,13 +122,18 @@ class Generator:
             raise ValueError(f"Unknown dec mode: '{self.mode}'")
         sample_fn = strategy_map[self.mode]
 
-        for _ in range(self.max_new_tokens):
+        num_new_tokens = (
+            max_new_tokens if max_new_tokens is not None else self.max_new_tokens
+        )
+
+        # Iterator
+        for _ in range(num_new_tokens):
             # Slice context to block size
             block = generated[-self.model.block_size :]
             input_array[0, -len(block) :] = block
 
             # Tensor fix
-            # Build the "bridge" to PyTorch: Convert the NumPy array to a PyTorch tensor.
+            # Build the "bridge" to PyTorch --> NumPy array to PyTorch tensor.
             # Get the model's device (cpu or gpu)
             device = next(self.model.parameters()).device
             input_tensor = torch.tensor(input_array, dtype=torch.long).to(device)
@@ -155,7 +160,8 @@ class Generator:
             #     # Append and check for stop condition
             #     next_tk = self.full_sample(next_tk_logits)
 
-            generated.append(next_tk.item())
+            generated.append(int(next_tk))
+
             if self.eos_token_id is not None and next_tk == self.eos_token_id:
                 break
 

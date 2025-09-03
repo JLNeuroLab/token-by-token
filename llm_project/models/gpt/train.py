@@ -7,6 +7,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import argparse
 
 from llm_project.bpe.bytepair_encoding import BPE
 from llm_project.models.gpt.model import GPT
@@ -86,17 +87,24 @@ def main(
     merges_exist = os.path.exists(merges_path)
     vocab_exist = os.path.exists(vocab_path)
 
-    if force_retrain or not (merges_exist and vocab_exist):
+    tokenizer_full_file = "tokenizer_full.pkl"
+    tokenizer_full_path = os.path.join(
+        project_root, bpe_results_folder, tokenizer_full_file
+    )
+
+    tokenizer_full_file = "tokenizer_full.pkl"
+    tokenizer_full_path = os.path.join(
+        project_root, bpe_results_folder, tokenizer_full_file
+    )
+
+    if force_retrain or not os.path.exists(tokenizer_full_path):
         print(">>Training tokenizer from scratch...", flush=True)
         tokenizer.BPE_encoder()
-        print(f">>Saving tokenizer to {bpe_results_folder}...", flush=True)
-        save_item(tokenizer.merges, bpe_results_folder, merges_file)
-        save_item(tokenizer.vocab, bpe_results_folder, vocab_file)
+        tokenizer.build_token_mappings()  # ← ensure mappings are built before save
     else:
-        print(f">>Loaded pre-trained tokenizer from {bpe_results_folder}", flush=True)
-        tokenizer.merges = load_item(bpe_results_folder, merges_file)
-        tokenizer.vocab = load_item(bpe_results_folder, vocab_file)
-        tokenizer.build_token_mappings()
+        print(f">>Loaded FULL tokenizer from {tokenizer_full_path}", flush=True)
+        tokenizer = load_item(bpe_results_folder, tokenizer_full_file)
+        tokenizer.build_token_mappings()  # ← re-build after load just to be safe
 
     vocab_size = len(tokenizer.token_to_id)
     print(f"Vocabulary size: {vocab_size}", flush=True)
@@ -146,7 +154,7 @@ def main(
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     train_losses, val_losses, eval_steps = [], [], []
     best_val = float("inf")
-    best_path = os.path.join("experiments", "saved_models", "gpt_shakespeare-best.pth")
+    best_path = os.path.join("experiments", "saved_models", f"gpt_k{max_k}.pth")
     os.makedirs(os.path.dirname(best_path), exist_ok=True)
 
     @torch.no_grad()
@@ -206,12 +214,37 @@ def main(
         if iter_num > 0 and iter_num % log_interval == 0:
             print_resource_usage_compat(step=iter_num)
 
+            # 2125
     print("Training finished.", flush=True)
     save_path = os.path.join("experiments", "saved_models")
     os.makedirs(save_path, exist_ok=True)
-    model_save_path = os.path.join(save_path, "gpt_final.pt")
+    model_save_path = os.path.join(save_path, f"gpt_final_k{max_k}.pt")
     print(f"Saving model to {model_save_path}", flush=True)
     torch.save(model.state_dict(), model_save_path)
+    tokenizer_vocab_path = os.path.join(save_path, f"gpt_vocab_k{max_k}.pkl")
+    tokenizer_merges_path = os.path.join(save_path, f"gpt_merges_k{max_k}.pkl")
+    save_item(tokenizer.vocab, save_path, os.path.basename(tokenizer_vocab_path))
+    save_item(tokenizer.merges, save_path, os.path.basename(tokenizer_merges_path))
+    print(f"Saved frozen tokenizer vocab and merges for k={max_k}", flush=True)
+
+    print(f"Saving model to {model_save_path}", flush=True)
+    torch.save(model.state_dict(), model_save_path)
+
+    # --- SAVING BPE STATE SOLUTION
+    # Save the tokenizer state alongside the model for perfect consistency
+    tokenizer_vocab_path = os.path.join(save_path, f"gpt_vocab_k{max_k}.pkl")
+    tokenizer_merges_path = os.path.join(save_path, f"gpt_merges_k{max_k}.pkl")
+    save_item(
+        tokenizer.vocab,
+        os.path.dirname(tokenizer_vocab_path),
+        os.path.basename(tokenizer_vocab_path),
+    )
+    save_item(
+        tokenizer.merges,
+        os.path.dirname(tokenizer_merges_path),
+        os.path.basename(tokenizer_merges_path),
+    )
+    print(f"Saved tokenizer vocab and merges for k={max_k}", flush=True)
 
     # Plotting and saving results
     plot_folder = os.path.join("experiments", "plots", "gpt")
@@ -244,8 +277,6 @@ def main(
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="GPT Model Trainer")
     parser.add_argument("--max_iters", type=int, default=5000)
     parser.add_argument("--embd_dim", type=int, default=128)
@@ -271,3 +302,4 @@ if __name__ == "__main__":
         block_size=args.block_size,
         batch_size=args.batch_size,
     )
+    best_path = os.path.join("experiments", "saved_models", f"gpt_k{args.max_k}.pth")
