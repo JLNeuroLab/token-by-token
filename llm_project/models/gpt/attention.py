@@ -139,7 +139,11 @@ class CausalSelfAttention(nn.Module):
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     from configs.gpt_config import GPTCustomConfig
+=======
+    from llm_project.models.configs.configs import GPTCustomConfig
+>>>>>>> jacopo_dev
 
     # create config instance
     config = GPTCustomConfig(vocab_size=5000)

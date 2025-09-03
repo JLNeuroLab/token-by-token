@@ -1,4 +1,3 @@
-from llm_project.utils.file_manager import save_item, load_item
 import numpy as np
 import os
 import sys
@@ -37,17 +36,17 @@ def get_batch(data_ids, block_size, batch_size):
 
 
 class NeuralNgram:
-    def __init__(self, n, vocab_size, embedding_dim=32, seed=35):
+    def __init__(self, n, vocab_size, embd_dim=32, seed=35):
         np.random.seed(seed)
         self.n = n
         self.vocab_size = vocab_size
-        self.embedding_dim = embedding_dim
+        self.embd_dim = embd_dim
         # Initialize embedding matrix
         self.embeddings = (
-            np.random.randn(vocab_size, embedding_dim) * 0.01
+            np.random.randn(vocab_size, embd_dim) * 0.01
         )  # (vocab_size, embedding_dim)
         # Initialize weights and biases
-        self.W = np.random.randn(embedding_dim, vocab_size)
+        self.W = np.random.randn(embd_dim, vocab_size)
         self.b = np.zeros((1, 1, vocab_size))
 
     # -------------- FORWARD / LOSS -----------------
@@ -203,9 +202,10 @@ class NeuralNgram:
 
             # Numerical stability
             logits = logits - np.max(logits)
-
+            # Softmax
             exps = np.exp(logits)
             probs = exps / exps.sum()
+            
             print("DEBUG generate:", len(probs), self.vocab_size)
 
             assert len(probs) == self.vocab_size, f"{len(probs)} vs {self.vocab_size}"

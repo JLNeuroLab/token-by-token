@@ -1,6 +1,4 @@
 import os
-from llm_project.utils.file_manager import load_item
-
 def load_shakespeare(version ="raw"):
     version_map = {
         "raw": ("data/raw", "Shakespeare_clean_full.txt"),
@@ -14,6 +12,7 @@ def load_shakespeare(version ="raw"):
     folder, fname = version_map[version]
 
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    full_folder = os.path.join(project_root, folder)
-
-    return load_item(full_folder, fname)
+    full_path = os.path.join(project_root, folder, fname)
+    with open(full_path, "r", encoding="utf-8") as f:
+        text = f.read() 
+    return text

@@ -45,7 +45,7 @@ __init__.py
 tuning_results.json
 
 # Ignore the tree graph of the project
-LLM_project.txt
+LLM_tree.txt
 
 # Ignore virtual environment
 venv

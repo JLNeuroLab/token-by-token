@@ -75,14 +75,14 @@ def normalize_text(text):
 
 
 class BPE:
-    def __init__(self, max_k, data_path=None, text=None, track_resource_fn=None):
+    def __init__(self, max_k, datapath=None, text=None, track_resource_fn=None):
         # Step timer init for debugg
         self.merge_time_dict = {}  # Tracks times per merge step
         self._last_step_time = time.time()
         self.track_resource_fn = track_resource_fn or print_resource_usage
 
         # text attributes
-        self.datapath = data_path
+        self.datapath = datapath
         self.text = text
         self.train_text = None
         self.test_text = None
@@ -258,7 +258,7 @@ class BPE:
         print(f"BPE training {Colors.OKGREEN}[DONE]{Colors.ENDC}\n")
         self.build_token_mappings()
 
-    def plot_vocabulary_growth(self):
+    def plot_vocabulary_growth(self, save_path):
         """
         Visualize the growth of the vocabulary against the number of merges performed by BPE.
 
@@ -298,6 +298,10 @@ class BPE:
         plt.title("vocabulary size over number of merges")
         plt.legend()
         plt.tight_layout()
+
+        if save_path:
+            fig.savefig(save_path, bbox_inches="tight", dpi=150)
+            print(f"Vocabulary growth plot saved to: {save_path}")
         return fig
         # save_item(fig, "plots", "vocabulary_growth")
 
@@ -436,5 +440,4 @@ if __name__ == "__main__":
 
     save_item(bpe.vocab, train_results_path, "train_final_vocab.pkl")
     save_item(bpe.vocab_size_history, train_results_path, "train_vocab_history.pkl")
-    save_item(bpe.merges, train_results_path, "train_bpe_merges.pkl")
     save_item(bpe.merges, train_results_path, "train_bpe_merges.pkl")
