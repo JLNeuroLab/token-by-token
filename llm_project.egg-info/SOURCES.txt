@@ -1,6 +1,0 @@
-pyproject.toml
-llm_project.egg-info/PKG-INFO
-llm_project.egg-info/SOURCES.txt
-llm_project.egg-info/dependency_links.txt
-llm_project.egg-info/top_level.txt
-tests/test_generator.py

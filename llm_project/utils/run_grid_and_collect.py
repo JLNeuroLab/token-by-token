@@ -139,7 +139,7 @@ for model in MODELS:
     if model == "neural":
         ckpt = best_neural_ckpt()
         if ckpt:
-            generate_args += ["--neural_ckpt, ckpt"]
+            generate_args += ["--neural_ckpt", ckpt]
     stdout = run(generate_args, output_path=output_path)
 
     # --- Parse metrics ---

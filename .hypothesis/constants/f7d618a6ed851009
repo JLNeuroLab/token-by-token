@@ -1,4 +1,0 @@
-# file: C:\Users\aleru\OneDrive\Documents\Projects\u_projects\token-by-token-ale_branch\llm_project\models\ngrams\trainer.py
-# hypothesis_version: 6.138.8
-
-[0.0, 0.1, 0.3, 0.33, 0.34, 0.6, 0.7, 1000, 2000, 10000, '\nGenerated text:', '--', '--- bpe trained ---', '..', 'Perplexity', 'The', 'Training completed.', 'Training step', '__main__', 'best', 'black', 'bottom', 'bpe_tokens', 'bpe_tokens.txt', 'center', 'context_counts', 'default', 'experiments', 'inf', 'interpolated_probs', 'lambdas', 'n', 'ngram', 'ngram_freqs', 'o', 'right', 'saved_models', 'set2 (balanced)', 'skyblue', 'tokens', 'train', 'validation', 'y']

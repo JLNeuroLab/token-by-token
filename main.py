@@ -370,7 +370,6 @@ def main():
         action="version",
         version="Token-by-Token v1.0 by Larizza & Ruiz",
     )
-
     subparsers = parser.add_subparsers(dest="mode", required=True)
 
     # ---------------- Train mode --------------------
@@ -395,6 +394,7 @@ def main():
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
 
+    # --------------------- Train mode -----------------------
     # GPT args
     train_parser.add_argument("--max_iters", type=int, default=5000)
     train_parser.add_argument("--embd_dim", type=int, default=384)
@@ -411,6 +411,7 @@ def main():
     train_parser.add_argument(
         "--force_retrain",
         "--Force_retrain",
+        "--fr",
         dest="force_retrain",
         action="store_true",
         help="Retrain tokenizer/model even if cache exists (train only).",
@@ -459,8 +460,9 @@ def main():
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Use 'cuda' or 'cpu' (alias: 'gpu' is accepted).",
     )
-    gen_parser.add_argument("--dropout", type=float, default=0.2)
+
     # GPT-specific (keep defaults aligned with your trained checkpoint)
+    gen_parser.add_argument("--dropout", type=float, default=0.2)
     gen_parser.add_argument("--embd_dim", type=int, default=384)
     gen_parser.add_argument("--n_layer", type=int, default=4)
 
@@ -477,6 +479,7 @@ def main():
         default=2000,
         help="Maximum context size / k for NGram or Neural NGram",
     )
+
     gen_parser.add_argument("--batch_size", type=int, default=32)
     gen_parser.add_argument("--block_size", type=int, default=8)
     gen_parser.add_argument("--embedding_dim", type=int, default=16)
@@ -500,7 +503,6 @@ def main():
         exit(1)
 
     args = parser.parse_args()
-    # welcome_banner()
     args.func(args)
 
 
