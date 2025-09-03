@@ -14,7 +14,7 @@ def get_project_root(marker="llm_project"):
             return parent
     raise FileNotFoundError(f"Project root not found. Couldn't locate folder '{marker}'")
 
-def get_experiment_path(root, category, name=None):
+def get_model_path(root, category, subdir=None, final=False):
     """
     Create and return a standardized path for experiment assets.
 
@@ -30,15 +30,16 @@ def get_experiment_path(root, category, name=None):
     if root is None:
         root = get_project_root()
     root = Path(root)
-    exp_path = root / "experiments" / category
-    if name:
-        exp_path = exp_path / name
-
+    base_folder = "experiments" if not final else "saved_models"
+    exp_path = root / base_folder / category
+    if subdir:
+        exp_path = exp_path / subdir
+    print(f"folder: {exp_path}")
     exp_path.mkdir(parents=True, exist_ok=True)
     return exp_path
 
 
-def save_model(model, root, category="saved_models", name=None, filename=None):
+def save_model(model, root, category="models", subdir=None, filename=None, final=False):
     """
     Save an object (model or state dictionary) to a structured folder under root.
 
@@ -53,7 +54,7 @@ def save_model(model, root, category="saved_models", name=None, filename=None):
         str: Full path to the saved file.
     """
     # Build folder path
-    save_dir = get_experiment_path(root, category, name)
+    save_dir = get_model_path(root, category, subdir, final=final)
     if filename is None:
         filename = "model.pkl"
     file_path = os.path.join(save_dir, filename)
@@ -66,7 +67,7 @@ def save_model(model, root, category="saved_models", name=None, filename=None):
 
     return file_path
 
-def load_model(file_path):
+def load_model(root, filename, category="models", final=None):
     """
     Load a previously saved model or state dictionary.
 
@@ -79,14 +80,17 @@ def load_model(file_path):
     Raises:
         FileNotFoundError: If file does not exist.
     """
+    file_path = get_model_path(root, category, final=final) / filename
+
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found in: {file_path}")
+
     with open(file_path, "rb") as f:
         model = pickle.load(f)
 
     return model
 
-def save_tokenizer(bpe, root, filename, category="tokenizers", name=None):
+def save_tokenizer(bpe, root, filename, category="tokenizers", final=False):
     """
     Save only the BPE tokenizer (merges) to a structured folder under root.
 
@@ -100,26 +104,20 @@ def save_tokenizer(bpe, root, filename, category="tokenizers", name=None):
     Returns:
         str: Full path to the saved file.
     """
-    if filename is None:
-        raise ValueError("You must provide a filename to save the tokenizer.")
-    
-    save_dir = get_experiment_path(root, category, name)
-    os.makedirs(save_dir, exist_ok=True)
-
-    file_path = os.path.join(save_dir, filename)
-
     data = {
         "bpe": bpe,
-        "tokens": getattr(bpe, "tokens", None)  # salva i tokens se esistono
+        "tokens": getattr(bpe, "tokens", None)
     }
+    return save_model(
+        model=data,
+        root=root,
+        category=category,
+        filename=filename,
+        final=final
+    )
 
-    with open(file_path, "wb") as f:
-        pickle.dump(data, f)
 
-    return file_path
-
-
-def load_tokenizer(file_path):
+def load_tokenizer(root, filename, category="tokenizers", final=False):
     """
     Load only the BPE tokenizer from a saved state dictionary.
 
@@ -133,13 +131,7 @@ def load_tokenizer(file_path):
         FileNotFoundError: If the file does not exist.
         ValueError: If no BPE merges are found in the file.
     """
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found in: {file_path}")
-    
-    with open(file_path, "rb") as f:
-        data = pickle.load(f)
-    
-    bpe = data["bpe"]
-    tokens = data.get("tokens", None)
-    return bpe, tokens
+    data = load_model(root=root, filename=filename, category=category, final=final)
+    return data["bpe"], data.get("tokens", None)
+
 

@@ -5,7 +5,7 @@ import numpy as np
 from collections import Counter
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from llm_project.utils.file_manager import save_model, load_model, get_experiment_path, get_project_root
+from llm_project.utils.file_manager import save_model, load_model, get_model_path, get_project_root
 from llm_project.models.ngrams.model import NGram
 from llm_project.utils.dataloader import load_shakespeare
 from llm_project.models.configs.configs import NgramConfig
@@ -38,13 +38,13 @@ class NGramTrainer:
                  }
         return state
     
-    def _save_state(self, name="ngram", filename=None):
+    def _save_state(self, subdir="ngram", filename=None):
         state = self._state_dict()
-        save_model(state, self.root, category="saved_models", name=name, filename=filename)
+        save_model(state, self.root, category="saved_models", subdir=subdir, filename=filename)
 
     def _load_state(self, file_path):
         
-        model = load_model(file_path=file_path)
+        model = load_model(root=self.root, filename=file_path)
         
         self.model = NGram(tokens=model["tokens"], n=model["n"])
         self.model.ngram_freqs = model["ngram_freqs"]
@@ -66,7 +66,7 @@ class NGramTrainer:
         self.valid_text = full_valid_text[:valid_limit] if valid_limit else full_valid_text
 
         model_fname = f"ngram_model_n{self.n}_k{self.k}.pkl"
-        model_folder = get_experiment_path(self.root, "saved_models", name="ngram")
+        model_folder = get_model_path(self.root, "saved_models", subdir="ngram")
         model_path = os.path.join(model_folder, model_fname)
 
         if not force_retrain and os.path.exists(model_path):
@@ -84,7 +84,7 @@ class NGramTrainer:
         else:
             self.model.lambdas = {"default": [1 / self.n] * self.n}
 
-        self._save_state(name="ngram", filename=model_fname)
+        self._save_state(subdir="ngram", filename=model_fname)
         print(f"✅ Model saved to: {model_path}")
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"❌ Model not found at {model_path}")
