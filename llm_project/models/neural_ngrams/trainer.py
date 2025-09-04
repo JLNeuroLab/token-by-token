@@ -12,6 +12,8 @@ class NeuralNgramTrainer:
     def __init__(
         self,
         model,
+        epochs,
+        lr,
         tokens,
         batch_size,
         train_text,
@@ -20,7 +22,6 @@ class NeuralNgramTrainer:
         max_k,
         root=None,
         print_every=100,
-        autoload=True,
     ):
         
     # trainer parameters
@@ -42,7 +43,9 @@ class NeuralNgramTrainer:
         self.tokens = tokens
         self.train_ids = None
         self.val_ids = None
-        self.autoload = autoload
+
+        self.epochs = epochs
+        self.lr = lr
 
     def get_batch(self, data_ids):
         """
@@ -76,9 +79,14 @@ class NeuralNgramTrainer:
         state = {
             "n": self.model.n,
             "vocab_size": self.model.vocab_size,
-            "embeddings": self.model.embeddings,
-            "W": self.model.W,
-            "b": self.model.b
+            "embd_dim": self.model.embd_dim,
+            "params": {
+                "embeddings": self.model.embeddings,
+                "W": self.model.W,
+                "b": self.model.b
+            },
+            "id2token": getattr(self, "id2token", None),
+            "token2id": getattr(self, "token2id", None)
         }
         return state
     
@@ -86,39 +94,50 @@ class NeuralNgramTrainer:
         final_flag = final if final is not None else getattr(self, "final", False)
         
         # scegli la sottocartella in base a final
-        target_subdir = "final" if final_flag else "checkpoints"
-        save_path = os.path.join(self.model_dir, target_subdir)
-        os.makedirs(save_path, exist_ok=True)
+        model_subdir = "neural_ngrams"
+        target_subdir = os.path.join(model_subdir, "checkpoints") if not final_flag else os.path.join(model_subdir, "final")
+
 
         state = self._state_dict()
 
         # salva il file
         full_path = save_model(
             state,
-            root=save_path,
-            category="",  # già dentro save_path
-            subdir="",
+            root=self.root,
+            subdir=target_subdir,
             filename=filename,
-            final=False,  # già gestito da target_subdir
+            category="models",
+            final=final_flag,
         )
         return full_path
     
     def _load_state(self, filename=None, final=False, subdir=None):
-        # print(f"[DEBUG LOAD] Trying to load model from: {filename}")
         final_flag = final if final is not None else getattr(self, "final", False)
-        # print(f"[DEBUG LOAD] final_flag = {final_flag}, subdir = 'ngram'")
+        
+        filename = filename or "best_model.pkl"
+        subdir = subdir or os.path.join("neural_ngrams", "final" if final else "checkpoints")
+
 
         model_data = load_model(
             root=self.root, filename=filename, final=final_flag, subdir=subdir
         )
 
-        # ricostruisci il modello neurale
+        # Rebuild the model
         self.model = NeuralNgram(
             n=model_data["n"],
             vocab_size=model_data["vocab_size"],
             embd_dim=model_data["embd_dim"],
         )
-        self.model.load_state_dict(model_data["params"])
+        self.model.embeddings = model_data["params"]["embeddings"]
+        self.model.W = model_data["params"]["W"]
+        self.model.b = model_data["params"]["b"]
+
+        self.id2token = model_data["id2token"]
+        self.token2id = model_data["token2id"]
+
+        if self.id2token is None or self.token2id is None:
+            raise ValueError("Loaded model does not contain vocab!")
+        
         return self.model
 
     def compute_perplexity(self, data_ids):
@@ -204,8 +223,8 @@ class NeuralNgramTrainer:
 
     def train(
         self,
-        epochs=3,
-        lr=0.01,
+        epochs=None,
+        lr=None,
         force_retrain=False,
         patience=3,
         max_checkpoints=5,
@@ -216,6 +235,10 @@ class NeuralNgramTrainer:
         Trains the neural n-gram model using mini-batch SGD with automatic checkpointing
         and saving of the final/best model.
         """
+
+        epochs = self.epochs if None else epochs
+        lr = self.lr if None else lr
+        print(f"[INFO] Training for {epochs} epochs, lr={lr}")
 
         # ---------------- MODEL INIT ----------------------
         if self.model is None or self.model.vocab_size != len(self.tokens):
@@ -230,10 +253,10 @@ class NeuralNgramTrainer:
         if not force_retrain:
             try:
                 model = self._load_state(filename="best_model.pkl", final=final)
-                print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Loaded final saved model.")
+                print(f"{Colors.OKGREEN}[OK]{Colors.ENDC}\n--- Loaded final saved model ---")
                 return model
             except FileNotFoundError:
-                print(f"{Colors.WARNING}[WARN]{Colors.ENDC} No final model found, training from scratch.")
+                print(f"{Colors.WARNING}[WARN]{Colors.ENDC} \n--- No final model found, training from scratch ---")
 
         # ---------------- TRAINING LOOP -------------------
         losses, val_losses = [], []

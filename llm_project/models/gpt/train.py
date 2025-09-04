@@ -1,5 +1,5 @@
 # -------------- Imports for GPT ----------------
-from llm_project.models.configs.configs import GptConfig
+from llm_project.models.configs.configs import GPTConfig
 from llm_project.models.gpt.model import GPT
 from llm_project.models.gpt.generator import Generator
 import torch

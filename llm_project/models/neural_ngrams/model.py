@@ -174,6 +174,9 @@ class NeuralNgram:
         stop_words=None,
         block_size=None
     ):
+        
+        if start_ids is None or len(start_ids) == 0:
+            raise ValueError("generate() has received start_ids=None or empty, initial tokens needed, check tokens gereration from tokenizer.")
         generated_ids = list(start_ids.copy())
 
         stop_ids = stop_ids or set()
@@ -204,13 +207,13 @@ class NeuralNgram:
 
             if next_id in stop_ids:
                 break
-            if id2token is not None and id2token[next_id] in stop_words:
+            if id2token is not None and next_id in id2token and id2token[next_id] in stop_words:
                 break
 
         if id2token is not None:
-            generated_tokens = [id2token[i] for i in generated_ids]
-            return generated_ids, generated_tokens
-
+            generated_tokens = [id2token.get(i, "UNK") for i in generated_ids]
+            generated_text = " ".join(generated_tokens)
+            return generated_ids, generated_tokens, generated_text
         return generated_ids
 
 if __name__ == "__main__":
