@@ -34,7 +34,6 @@ def get_model_path(root, category, subdir=None, final=False):
     exp_path = root / base_folder / category
     if subdir:
         exp_path = exp_path / subdir
-    print(f"folder: {exp_path}")
     exp_path.mkdir(parents=True, exist_ok=True)
     return exp_path
 
@@ -67,28 +66,33 @@ def save_model(model, root, category="models", subdir=None, filename=None, final
 
     return file_path
 
-def load_model(root, filename, category="models", final=None):
+def load_model(root, filename, category="models", final=False, subdir=None):
     """
-    Load a previously saved model or state dictionary.
+    Load a model from disk.
 
     Args:
-        file_path (str): Path to the saved pickle file.
+        root (str): Project root folder
+        filename (str): Pickle file name
+        category (str): Category folder (default: "models")
+        final (bool): If True, load from 'final' folder
+        subdir (str, optional): Optional subfolder inside category
 
     Returns:
-        object: Loaded object (model or state dictionary).
-
-    Raises:
-        FileNotFoundError: If file does not exist.
+        object: Loaded model object
     """
-    file_path = get_model_path(root, category, final=final) / filename
+    folder_path = get_model_path(root, category=category, subdir=subdir, final=final)
+    file_path = os.path.join(folder_path, filename)
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found in: {file_path}")
+        raise FileNotFoundError(f"File not found at: {file_path}")
 
+    import pickle
     with open(file_path, "rb") as f:
         model = pickle.load(f)
 
+    #print(f"[DEBUG load_model] Loaded model from: {file_path}")
     return model
+
 
 def save_tokenizer(bpe, root, filename, category="tokenizers", final=False):
     """
@@ -104,17 +108,34 @@ def save_tokenizer(bpe, root, filename, category="tokenizers", final=False):
     Returns:
         str: Full path to the saved file.
     """
+    # --- Save the tokenizer object ---
     data = {
         "bpe": bpe,
         "tokens": getattr(bpe, "tokens", None)
     }
-    return save_model(
-        model=data,
-        root=root,
-        category=category,
-        filename=filename,
-        final=final
-    )
+
+    save_dir = get_model_path(root=root, category=category, final=final)
+    os.makedirs(save_dir, exist_ok=True)
+
+    file_path = os.path.join(save_dir, filename)
+
+    with open(file_path, "wb") as f:
+        import pickle
+        pickle.dump(data, f)
+
+    # --- Save vocabulary growth plot in the same folder ---
+    try:
+        plot_filename = f"vocabulary_growth_k{bpe.max_k}.png"
+        plot_path = os.path.join(save_dir, plot_filename)
+        if hasattr(bpe, "plot_vocabulary_growth"):
+            bpe.plot_vocabulary_growth(save_path=plot_path)
+    except Exception as e:
+        print(f"Failed to save vocabulary growth plot: {e}")
+
+    print(f"Tokenizer saved to: {file_path}")
+    print(f"Vocabulary growth plot saved to: {plot_path}")
+
+    return file_path
 
 
 def load_tokenizer(root, filename, category="tokenizers", final=False):

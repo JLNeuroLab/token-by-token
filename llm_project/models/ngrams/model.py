@@ -227,27 +227,32 @@ class NGram:
         self._debug_resources("End batch interpolated prob")
         return probs
 
+        # ---------- PREDICT / GENERATE ----------
 
     def predict_next_token_sampling(self, context, lambdas):
         """Predicts the next token using interpolated probabilities."""
-        candidates = {}
-        # Find all tokens that can follow the context
-        for ngram, freq in self.ngram_freqs.items():
-            if len(ngram) == len(context) + 1 and ngram[:-1] == context:
-                candidates[ngram] = self.get_interpolated_prob(ngram, lambdas)
-
-        if not candidates:
+        context = tuple(context)
+        if context not in self.ngram_dict:
             return None
+        # By using class attribute ngram dict we can get all the possible
+        # tokens following the context along with the respective frequence
+        candidates = list(self.ngram_dict[context].keys())
+        # interpolated_prob iterates over ngrams candidates one by one
+        # generating interpolated probs for each of them
+        probs = [
+            self.get_interpolated_prob_single(context + (t,), lambdas) for t in candidates 
+                                                                # -> (t, ): Need to convert python string t
+                                                                #           in python tuple (t,) to correctly 
+                                                                #           concatenate with context which is 
+                                                                #           a tuple object.
+        ] 
+        probs = np.array(probs, dtype=float)
+        # Normalize probabilities
+        probs /= probs.sum()
+        # Sample a token over the candidates according to the distribution of probs
+        chosen_token = np.random.choice(candidates, p=probs)
 
-        # Normalize probabilities and choose a token
-        total_prob = sum(candidates.values())
-        norm_probs = [p / total_prob for p in candidates.values()]
-        candidate_ngrams = list(candidates.keys())
-        chosen_ngram = candidate_ngrams[
-            np.random.choice(len(candidate_ngrams), p=norm_probs)
-        ]
-
-        return chosen_ngram[-1]
+        return chosen_token
 
     def generate_text(self, prompt_tokens, max_length=50):
         """Generates text from a prompt, with automatic backoff."""

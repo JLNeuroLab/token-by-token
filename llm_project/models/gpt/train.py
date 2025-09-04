@@ -331,9 +331,7 @@ class GptTrainer:
 
         # final save
         self._save_state(subdir="gpt", filename=self.model_fname)
-        print(
-            f"{Colors.OKGREEN}[SUCCESS]{Colors.ENDC} Model saved to: {self.model_path}"
-        )
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {self.model_path}")
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(
                 f"{Colors.FAIL}[FAIL]{Colors.ENDC}Model not found at {self.model_path}"
@@ -471,6 +469,85 @@ class GptTrainer:
         # (better: pass the tokenizer in from pipeline if you want decoding too)
         # Here we just start from an empty context for consistency
         return []
+
+
+if __name__ == "__main__":
+    """
+    Standalone GPT smoke test using its own BPE (mirrors the N-gram demo).
+    For the real experiments, prefer running via the pipeline so all models
+    share the same tokenizer. This is just a self-contained check.
+    """
+    import os
+    from llm_project.bpe.bytepair_encoding import BPE
+    from llm_project.utils.file_manager import save_tokenizer
+
+    # Repro & colors already in this file
+    set_seed(3108)
+
+    # --- Paths ---
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+    datapath = os.path.join(project_root, "data", "raw", "Shakespeare_clean_full.txt")
+
+    # --- BPE setup ---
+    max_k = 1000
+    bpe = BPE(max_k=max_k, datapath=datapath)
+
+    # Load + normalize, split (10% test)
+    _ = bpe.load_and_normalize()
+    test_text, train_text = bpe.split_train_test()
+    bpe.train_text = train_text[:10_000]
+    bpe.test_text = test_text[:2_000]
+
+    # Train BPE on the training slice
+    bpe.text = bpe.train_text
+    print("\n--- Training BPE ---\n")
+    bpe.BPE_encoder()
+
+    # Save tokenizer (merges)
+    save_tokenizer(bpe, project_root, f"BPE_merges_k{max_k}.pkl", category="tokenizers")
+    print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} BPE tokenizer saved")
+
+    # Tokenize splits
+    train_tokens = bpe.tokens
+    valid_text = train_text[10_000:12_000]  # small holdout slice
+    valid_tokens = bpe.BPE_segmenter(valid_text)
+    test_tokens = bpe.BPE_segmenter(bpe.test_text)
+
+    print(f"Train tokens: {len(train_tokens)}")
+    print(f"Valid tokens: {len(valid_tokens)}")
+    print(f"Test  tokens: {len(test_tokens)}\n")
+
+    # --- Trainer config (small/fast) ---
+    cfg = GPTTrainConfig()
+    cfg.embd_dim = 128
+    cfg.n_layer = 2
+    cfg.n_head = 4
+    cfg.block_size = 64
+    cfg.dropout = 0.2
+
+    cfg.batch_size = 32
+    cfg.max_iters = 200
+    cfg.eval_interval = 50
+    cfg.eval_iters = 50
+    cfg.learning_rate = 3e-4
+    cfg.log_interval = 50
+    cfg.device = None  # auto: cuda->mps->cpu
+
+    # --- Train GPT ---
+    tokens_dict = {"train": train_tokens, "validation": valid_tokens}
+    trainer = GptTrainer(config=cfg, tokens=tokens_dict, model=None, k=max_k)
+    _ = trainer.train(force_retrain=False)
+
+    # --- Perplexity on test set ---
+    if len(test_tokens) >= (cfg.block_size + 1):
+        ppl = trainer.compute_perplexity(test_tokens)
+        print(f"\nPerplexity on test set: {ppl:.2f}\n")
+    else:
+        print(
+            f"{Colors.WARNING}[!!!]{Colors.ENDC} Skipping test perplexity (test set too short for block_size={cfg.block_size})."
+        )
 
 
 #     config = GPTConfig(vocab_size, BLOCK_SIZE)

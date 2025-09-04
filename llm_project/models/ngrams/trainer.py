@@ -7,15 +7,14 @@ from llm_project.utils.file_manager import (
     get_model_path,
     get_project_root,
 )
-from llm_project.utils.file_manager import (
-    save_model,
-    load_model,
-    get_experiment_path,
-    get_project_root,
-)
+
+# --- NGramTrainer Setup ---
+from llm_project.models.configs.configs import NgramConfig
+from llm_project.models.ngrams.trainer import NGramTrainer
+from llm_project.utils.debugg_utils import Colors
 import os
-import math
-import time
+
+# import time
 import numpy as np
 from collections import Counter
 import matplotlib.pyplot as plt
@@ -29,17 +28,18 @@ class NGramTrainer:
         self.n = config.n
         self.device = config.device
         if k is None:
-            raise ValueError("k must be selected (use max_k from the BPE tokenizer)")
+            raise ValueError(
+                f"{Colors.FAIL}[FAIL]{Colors.ENDC} k must be selected (use max_k from the BPE tokenizer)"
+            )
         self.k = k
         self.root = get_project_root()
         self.config = config
-
         self.train_text = None
         self.valid_text = None
 
     def _state_dict(self):
         if self.model is None:
-            raise ValueError("Model not initialized")
+            raise ValueError(f"{Colors.FAIL}[FAIL]{Colors.ENDC} Model not initialized")
         state = {
             "n": self.model.n,
             "tokens": self.model.tokens,
@@ -49,24 +49,67 @@ class NGramTrainer:
         }
         return state
 
-    def _save_state(self, subdir="ngram", filename=None):
+    def _save_state(self, subdir="ngram", filename=None, final=None):
+        """
+        Save model state to disk.
+
+        Args:
+            subdir (str): Subfolder inside models
+            filename (str): File name for pickle
+            final (bool): Save in final folder if True
+
+        Returns:
+            str: Full path of saved file
+        """
+        final_flag = final if final is not None else getattr(self, "final", False)
         state = self._state_dict()
-        save_model(
-            state, self.root, category="saved_models", subdir=subdir, filename=filename
+
+        save_path = save_model(
+            state,
+            root=self.root,
+            subdir=subdir,
+            category="models",
+            filename=filename,
+            final=final_flag,
+        )
+        # print(f"[DEBUG SAVE] Saving model to: {save_path}")
+        # print(f"[DEBUG SAVE] final_flag = {final_flag}, subdir = {subdir}")
+        # print(f"[DEBUG SAVE] Model saved successfully at: {save_path}")
+        return save_path
+
+    def _load_state(self, filename=None, final=False):
+        """
+        Load model state from disk and initialize NGram instance.
+
+        Args:
+            filename (str): Name of the pickle file
+            final (bool): Load from final folder if True
+
+        Returns:
+            NGram: Loaded NGram model
+        """
+        # print(f"[DEBUG LOAD] Trying to load model from: {filename}")
+        final_flag = final if final is not None else getattr(self, "final", False)
+        # print(f"[DEBUG LOAD] final_flag = {final_flag}, subdir = 'ngram'")
+
+        model_data = load_model(
+            root=self.root, filename=filename, final=final_flag, subdir="ngram"
         )
 
-    def _load_state(self, file_path):
-        model = load_model(root=self.root, filename=file_path)
-
-        self.model = NGram(tokens=model["tokens"], n=model["n"])
-        self.model.ngram_freqs = model["ngram_freqs"]
-        self.model.ngram_dict = model["ngram_dict"]
-        self.model.lambdas = model["lambdas"]
+        self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
+        self.model.ngram_freqs = model_data["ngram_freqs"]
+        self.model.ngram_dict = model_data["ngram_dict"]
+        self.model.lambdas = model_data["lambdas"]
 
         return self.model
 
     def train(
-        self, force_retrain=False, tune_lambdas=True, train_limit=None, valid_limit=None
+        self,
+        force_retrain=False,
+        tune_lambdas=True,
+        train_limit=None,
+        valid_limit=None,
+        final=None,
     ):
         """Loads data and trains the N-gram model using pre-tokenized input."""
         if self.tokens is None:
@@ -86,13 +129,19 @@ class NGramTrainer:
         )
 
         model_fname = f"ngram_model_n{self.n}_k{self.k}.pkl"
-        model_folder = get_model_path(self.root, "saved_models", subdir="ngram")
+        final_flag = final if final is not None else getattr(self, "final", False)
+        model_folder = get_model_path(
+            self.root, "models", subdir="ngram", final=final_flag
+        )
         model_path = os.path.join(model_folder, model_fname)
 
-        if not force_retrain and os.path.exists(model_path):
-            print("--- Loading pre-trained model ---")
-            self._load_state(model_path)
-            return self.model
+        if os.path.exists(model_path) and not force_retrain:
+            print(f"\n--- Loading pre-trained model from:\n{model_path}")
+            return self._load_state(model_fname, final=final_flag)
+        else:
+            print(
+                f"{Colors.WARNING}[WARNING]{Colors.ENDC} No existing model found, training one from scratch"
+            )
 
         print("--- Training N-gram model ---")
         self.model = NGram(self.tokens, self.n)
@@ -104,10 +153,11 @@ class NGramTrainer:
         else:
             self.model.lambdas = {"default": [1 / self.n] * self.n}
 
-        self._save_state(subdir="ngram", filename=model_fname)
-        print(f"✅ Model saved to: {model_path}")
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"❌ Model not found at {model_path}")
+        # Save model and get full path
+        saved_path = self._save_state(
+            subdir="ngram", filename=model_fname, final=self.final
+        )
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {saved_path}")
 
         return self.model
 
@@ -156,9 +206,11 @@ class NGramTrainer:
 
         try:
             fig.savefig(save_path, bbox_inches="tight", dpi=150)
-            print(f"\nPerplexity comparison plot saved to {save_path}")
+            print(
+                f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity comparison plot saved to {save_path}"
+            )
         except Exception as e:
-            print(f"Failed to save plot: {e}")
+            print(f"{Colors.FAIL}[FAIL]{Colors.ENDC} Failed to save plot: {e}")
 
         plt.close(fig)
 
@@ -226,7 +278,7 @@ class NGramTrainer:
         save_path = os.path.join(output_folder, "ngram_perplexity_vs_n_comparison.png")
         fig.savefig(save_path, bbox_inches="tight", dpi=150)
         plt.close(fig)
-        print(f"Plot saved to {save_path}")
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Plot saved to {save_path}")
 
 
 if __name__ == "__main__":
@@ -267,11 +319,7 @@ if __name__ == "__main__":
 
     # --- Save BPE tokenizer (merges) ---
     save_tokenizer(bpe, project_root, f"BPE_merges_k{max_k}.pkl", category="tokenizers")
-    print("BPE tokenizer saved")
-
-    # --- NGramTrainer Setup ---
-    from llm_project.models.configs.configs import NgramConfig
-    from llm_project.models.ngrams.trainer import NGramTrainer
+    print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} BPE tokenizer saved")
 
     config = NgramConfig(n=3, device="cpu")
     trainer = NGramTrainer(config=config, model=None, tokens=train_tokens, k=max_k)
@@ -280,7 +328,9 @@ if __name__ == "__main__":
     ngram_model = trainer.train(
         force_retrain=False, tune_lambdas=True, train_limit=10000, valid_limit=1000
     )
-    print("N-gram model saved automatically by trainer.")
+    print(
+        f"{Colors.OKGREEN}[OK]{Colors.ENDC} N-gram model saved automatically by trainer."
+    )
 
     # Compute perplexity on test set
     best_lambdas = ngram_model.lambdas["best"]
