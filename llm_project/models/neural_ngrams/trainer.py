@@ -25,6 +25,7 @@ class NeuralNgramTrainer:
         embedding_dim=16,
         autoload=True,
     ):
+
         self.model = model
         self.n = n
         self.train_text = train_text

@@ -230,8 +230,8 @@ if __name__ == "__main__":
             train_limit=100000,
             valid_limit=10000
         )
-        prompt = "hey mother fucker I wanted to ask you something real quick I am your father!"
-        generated_text = pipeline.generate(prompt, max_length=200)
+        prompt = "to be or not to"
+        generated_text = pipeline.generate(prompt, max_length=1)
         print(f"\nGenerated text:\n{generated_text}")
 
     elif mode == "generate_pretrained":
