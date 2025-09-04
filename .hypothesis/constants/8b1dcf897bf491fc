@@ -1,4 +1,0 @@
-# file: C:\Users\aleru\OneDrive\Documents\Projects\u_projects\token-by-token-ale_branch\llm_project\bpe\bytepair_encoding.py
-# hypothesis_version: 6.138.8
-
-[0.1, 0.7, 100, 1000, 1024, 2000, 10000, '-', '--', '/', '/content', '/kaggle/working', ':', 'C:', 'Merge Step', 'Project root:', 'Step Duration (s)', 'SystemDrive', 'Time (seconds)', 'Time per Merge Step', 'Training BPE', "[^\\w\\s?!.']", '\\', '\\s+', '_', '__main__', 'blue', 'bpe_results', 'darwin', 'data', 'experiments', 'gray', 'linux', 'number of merges', 'plots', 'r', 'raw', 'red', 'test_results', 'test_tokenized.pkl', 'test_tokenized.txt', 'train_bpe_merges.pkl', 'train_results', 'utf-8', 'vocabulary size', 'windows']
