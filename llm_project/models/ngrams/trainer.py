@@ -28,7 +28,7 @@ class NGramTrainer:
     
     def _state_dict(self):
         if self.model is None:
-            raise ValueError("Model not initialize")
+            raise ValueError("Model not initialized")
         state = {
                 "n": self.model.n,
                 "tokens":self.model.tokens,
@@ -38,22 +38,58 @@ class NGramTrainer:
                  }
         return state
     
-    def _save_state(self, subdir="ngram", filename=None):
-        state = self._state_dict()
-        save_model(state, self.root, category="saved_models", subdir=subdir, filename=filename)
+    def _save_state(self, subdir="ngram", filename=None, final=None):
+        """
+        Save model state to disk.
 
-    def _load_state(self, file_path):
-        
-        model = load_model(root=self.root, filename=file_path)
-        
-        self.model = NGram(tokens=model["tokens"], n=model["n"])
-        self.model.ngram_freqs = model["ngram_freqs"]
-        self.model.ngram_dict = model["ngram_dict"]
-        self.model.lambdas = model["lambdas"]
-    
+        Args:
+            subdir (str): Subfolder inside models
+            filename (str): File name for pickle
+            final (bool): Save in final folder if True
+
+        Returns:
+            str: Full path of saved file
+        """
+        final_flag = final if final is not None else getattr(self, "final", False)
+        state = self._state_dict()
+
+        save_path = save_model(state, 
+                                root=self.root,  
+                                subdir=subdir, 
+                                category="models",
+                                filename=filename,
+                                final=final_flag)
+        #print(f"[DEBUG SAVE] Saving model to: {save_path}")
+        #print(f"[DEBUG SAVE] final_flag = {final_flag}, subdir = {subdir}")
+        #print(f"[DEBUG SAVE] Model saved successfully at: {save_path}")
+        return save_path
+
+    def _load_state(self, filename=None, final=False):
+        """
+        Load model state from disk and initialize NGram instance.
+
+        Args:
+            filename (str): Name of the pickle file
+            final (bool): Load from final folder if True
+
+        Returns:
+            NGram: Loaded NGram model
+        """
+        #print(f"[DEBUG LOAD] Trying to load model from: {filename}")
+        final_flag = final if final is not None else getattr(self, "final", False)
+        #print(f"[DEBUG LOAD] final_flag = {final_flag}, subdir = 'ngram'")
+
+        model_data = load_model(root=self.root, filename=filename, final=final_flag, subdir="ngram")
+
+        self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
+        self.model.ngram_freqs = model_data["ngram_freqs"]
+        self.model.ngram_dict = model_data["ngram_dict"]
+        self.model.lambdas = model_data["lambdas"]
+
         return self.model
 
-    def train(self, force_retrain=False, tune_lambdas=True, train_limit=None, valid_limit=None):
+
+    def train(self, force_retrain=False, tune_lambdas=True, train_limit=None, valid_limit=None, final=None):
         """Loads data and trains the N-gram model using pre-tokenized input."""
         if self.tokens is None:
             raise ValueError("Tokens must be provided externally; tokenizer is decoupled.")
@@ -66,13 +102,15 @@ class NGramTrainer:
         self.valid_text = full_valid_text[:valid_limit] if valid_limit else full_valid_text
 
         model_fname = f"ngram_model_n{self.n}_k{self.k}.pkl"
-        model_folder = get_model_path(self.root, "saved_models", subdir="ngram")
+        final_flag = final if final is not None else getattr(self, "final", False)
+        model_folder = get_model_path(self.root, "models", subdir="ngram", final=final_flag)
         model_path = os.path.join(model_folder, model_fname)
 
-        if not force_retrain and os.path.exists(model_path):
-            print("--- Loading pre-trained model ---")
-            self._load_state(model_path)
-            return self.model
+        if os.path.exists(model_path) and not force_retrain:
+            print(f"\n--- Loading pre-trained model from:\n{model_path}")
+            return self._load_state(model_fname, final=final_flag)
+        else:
+            print("No existing model found, training one from scratch")
 
         print("--- Training N-gram model ---")
         self.model = NGram(self.tokens, self.n)
@@ -84,10 +122,9 @@ class NGramTrainer:
         else:
             self.model.lambdas = {"default": [1 / self.n] * self.n}
 
-        self._save_state(subdir="ngram", filename=model_fname)
-        print(f"✅ Model saved to: {model_path}")
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"❌ Model not found at {model_path}")
+        # Save model and get full path
+        saved_path = self._save_state(subdir="ngram", filename=model_fname, final=self.final)
+        print(f"✅ Model saved to: {saved_path}")
 
         return self.model
 
