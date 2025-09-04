@@ -117,7 +117,7 @@ class NeuralNgram:
         # E = embedding_dim
         # C = vocab_size
         B, L, C = probs.shape
-        E = self.embedding_dim
+        E = self.embd_dim
 
         # gradient of cross entropy and softmax
         dZ = probs.copy()  # (B, L, C)
@@ -142,21 +142,6 @@ class NeuralNgram:
 
         # update embeddings (vectorized, safer)
         np.add.at(self.embeddings, X_batch, -lr * dE)
-
-    # ------------- MODEL STATES ------------------
-    def state_dict(self):
-        """
-        Returns model parameters as a dictionary
-        """
-        return {"embeddings": self.embeddings, "W": self.W, "b": self.b}
-
-    def load_state_dict(self, state):
-        """
-        Loads parameters from dictionary
-        """
-        self.embeddings = state["embeddings"]
-        self.W = state["W"]
-        self.b = state["b"]
 
     #  ---------------- PLOTTING LOSS CURVE -------------------
 
@@ -187,6 +172,7 @@ class NeuralNgram:
         stochastic=True,
         stop_ids=None,
         stop_words=None,
+        block_size=None
     ):
         generated_ids = list(start_ids.copy())
 
@@ -194,7 +180,7 @@ class NeuralNgram:
         stop_words = stop_words or set()
 
         for _ in range(max_new_tokens):
-            context = generated_ids[-self.block_size :]
+            context = generated_ids[-block_size:] if len(generated_ids) >= 1 else [generated_ids[-1]]
             X = np.array(context, dtype=np.int64)[None, :]
             # generate logits
             # Pick the last token of the first and only example
@@ -206,7 +192,7 @@ class NeuralNgram:
             exps = np.exp(logits)
             probs = exps / exps.sum()
             
-            print("DEBUG generate:", len(probs), self.vocab_size)
+            #print("DEBUG generate:", len(probs), self.vocab_size)
 
             assert len(probs) == self.vocab_size, f"{len(probs)} vs {self.vocab_size}"
             if stochastic:
@@ -226,25 +212,6 @@ class NeuralNgram:
             return generated_ids, generated_tokens
 
         return generated_ids
-
-    # -------------- PERPLEXITY METRIC ------------------
-    def compute_perplexity(self, data_ids):
-        """
-        Computes the perplexity of the model on a given dataset.
-
-        Args:
-            data_ids (list[int]): sequence of token ids to evaluate.
-
-        Returns:
-            float: perplexity score (lower is better).
-        """
-        X_batch, y_batch = get_batch(
-            data_ids, block_size=self.block_size, batch_size=self.batch_size
-        )
-        logits = self.forward(X_batch)
-        loss, _ = self.cross_entropy_loss(logits, y_batch)
-        return float(np.exp(loss))
-
 
 if __name__ == "__main__":
     from llm_project.utils.token_mapping import token_id_mapping

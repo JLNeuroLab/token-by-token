@@ -122,7 +122,7 @@ class LM_Pipeline:
                 f"Model type '{self.model_type}' not implemented")
 
         if model_type == "neural":
-            neural_trainer = NeuralTrainer(
+            neural_trainer = Neur(
                 config=self.config, model=None, tokens=train_tokens, k=max_k
             )
             self.model = ngram_trainer.train(
@@ -166,7 +166,9 @@ class LM_Pipeline:
             force_retrain_tokenizer=False,  # -> Handle force_retrain of bpe
             force_retrain_model=False,  # -> Handle force_retrain of the model
             train_limit=10000,
-            valid_limit=1000):
+            valid_limit=1000
+            ):
+        
         """Full automatic pipeline: tokenizer → tokens → trainer → model"""
 
         if train_text is None:
@@ -188,7 +190,6 @@ class LM_Pipeline:
             valid_text) if valid_text else None
         if valid_tokens is not None and valid_limit:
                 valid_tokens = valid_tokens[:valid_limit]
-            if valid_tokens is not None:
                 print(f"DEBUG: valid_tokens length = {len(valid_tokens)}")
 
         # STEP 3: train model
