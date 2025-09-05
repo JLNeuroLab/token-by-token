@@ -10,7 +10,6 @@ from llm_project.utils.file_manager import (
 
 # --- NGramTrainer Setup ---
 from llm_project.models.configs.configs import NgramConfig
-from llm_project.models.ngrams.trainer import NGramTrainer
 from llm_project.utils.debugg_utils import Colors
 import os
 

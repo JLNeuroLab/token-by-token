@@ -117,7 +117,7 @@ class NeuralNgram:
         # E = embedding_dim
         # C = vocab_size
         B, L, C = probs.shape
-        E = self.embedding_dim
+        E = self.embd_dim
 
         # gradient of cross entropy and softmax
         dZ = probs.copy()  # (B, L, C)
@@ -143,21 +143,6 @@ class NeuralNgram:
         # update embeddings (vectorized, safer)
         np.add.at(self.embeddings, X_batch, -lr * dE)
 
-    # ------------- MODEL STATES ------------------
-    def state_dict(self):
-        """
-        Returns model parameters as a dictionary
-        """
-        return {"embeddings": self.embeddings, "W": self.W, "b": self.b}
-
-    def load_state_dict(self, state):
-        """
-        Loads parameters from dictionary
-        """
-        self.embeddings = state["embeddings"]
-        self.W = state["W"]
-        self.b = state["b"]
-
     #  ---------------- PLOTTING LOSS CURVE -------------------
 
     def plot_loss(self, train_losses, val_losses=None):
@@ -178,73 +163,127 @@ class NeuralNgram:
         plt.show()
 
     # ---------------- GENERATION -------------------
+    def predict_next_token_sampling(self, logits, top_k=None, top_p=None, temperature=1.0):
+        """
+        Sample the next token from logits using temperature scaling, top-k, and top-p (nucleus) sampling.
+
+        Args:
+            logits (np.ndarray): 1D array of raw model logits for all tokens.
+            top_k (int, optional): Keep only top_k most probable tokens for sampling.
+            top_p (float, optional): Keep the minimal set of tokens with cumulative probability >= top_p.
+            temperature (float): Temperature for scaling logits. Higher values increase randomness.
+
+        Returns:
+            int: Index of the sampled token.
+        """
+        # --- Apply temperature scaling ---
+        logits = logits / temperature
+
+        # --- Convert logits to probabilities using softmax ---
+        exps = np.exp(logits - np.max(logits))  # subtract max for numerical stability
+        probs = exps / np.sum(exps)             # softmax probabilities
+
+        # --- Top-K sampling ---
+        if top_k is not None:
+            # Find indices of the top_k highest probability tokens
+            top_k_ids = np.argsort(probs)[-top_k:]
+            top_k_probs = probs[top_k_ids]
+            # Normalize the probabilities of top_k tokens
+            top_k_probs /= np.sum(top_k_probs)
+            # Zero out all other token probabilities
+            probs_filtered = np.zeros(probs.shape)
+            probs_filtered[top_k_ids] = top_k_probs
+            probs = probs_filtered  # update probs to filtered top_k
+
+        # --- Top-P (nucleus) sampling ---
+        if top_p is not None:
+            # Sort token indices in descending order of probability
+            sorted_ids = np.argsort(probs)[::-1]
+            sorted_probs = probs[sorted_ids]
+            # Compute cumulative probabilities
+            cumulative_probs = np.cumsum(sorted_probs)
+            # Find the cutoff index where cumulative probability exceeds top_p
+            cutoff = np.searchsorted(cumulative_probs, top_p, side="right") + 1
+            # Keep only the nucleus tokens
+            nucleus_ids = sorted_ids[:cutoff]
+            nucleus_probs = sorted_probs[:cutoff]
+            # Normalize probabilities of nucleus tokens
+            nucleus_probs /= np.sum(nucleus_probs)
+            # Zero out all other probabilities
+            probs_filtered = np.zeros(probs.shape)
+            probs_filtered[nucleus_ids] = nucleus_probs
+            probs = probs_filtered
+
+        # --- Sample the next token from the filtered probabilities ---
+        next_id = int(np.random.choice(len(probs), p=probs))
+
+        return next_id
 
     def generate(
         self,
         start_ids,
         id2token=None,
         max_new_tokens=20,
-        stochastic=True,
+        top_k=None,
+        top_p=None,
+        temperature=1.0,
         stop_ids=None,
         stop_words=None,
+        block_size=None
     ):
-        generated_ids = list(start_ids.copy())
+        """
+        Generate a sequence of tokens starting from start_ids using top-k / top-p sampling.
 
+        Args:
+            start_ids (list of int): Initial token IDs to start generation.
+            id2token (dict, optional): Mapping from IDs to tokens for decoding.
+            max_new_tokens (int): Maximum number of tokens to generate.
+            top_k (int, optional): Top-k sampling parameter.
+            top_p (float, optional): Top-p (nucleus) sampling parameter.
+            temperature (float): Temperature for sampling.
+            stop_ids (set, optional): Token IDs which stop generation if produced.
+            stop_words (set, optional): Token strings which stop generation if produced.
+            block_size (int, optional): Context window size.
+
+        Returns:
+            tuple: (generated_ids, generated_tokens, generated_text)
+        """
+        if start_ids is None or len(start_ids) == 0:
+            raise ValueError("start_ids must be provided and non-empty.")
+
+        generated_ids = list(start_ids.copy())
         stop_ids = stop_ids or set()
         stop_words = stop_words or set()
 
         for _ in range(max_new_tokens):
-            context = generated_ids[-self.block_size :]
-            X = np.array(context, dtype=np.int64)[None, :]
-            # generate logits
-            # Pick the last token of the first and only example
-            logits = self.forward(X)[0, -1]
+            # Use last 'block_size' tokens as context
+            context = generated_ids[-block_size:] if block_size is not None else generated_ids
+            X = np.array(context, dtype=np.int64)[None, :]  # shape: (1, block_size)
+            logits = self.forward(X)[0, -1]  # take logits of last token
 
-            # Numerical stability
-            logits = logits - np.max(logits)
-            # Softmax
-            exps = np.exp(logits)
-            probs = exps / exps.sum()
-            
-            print("DEBUG generate:", len(probs), self.vocab_size)
-
-            assert len(probs) == self.vocab_size, f"{len(probs)} vs {self.vocab_size}"
-            if stochastic:
-                next_id = int(np.random.choice(self.vocab_size, p=probs))
-            else:
-                next_id = int(np.argmax(probs))
+            # Sample next token using top-k / top-p / temperature
+            next_id = self.predict_next_token_sampling(
+                logits,
+                top_k=top_k,
+                top_p=top_p,
+                temperature=temperature
+            )
 
             generated_ids.append(next_id)
 
+            # Stop if next token is in stop_ids or stop_words
             if next_id in stop_ids:
                 break
-            if id2token is not None and id2token[next_id] in stop_words:
+            if id2token is not None and id2token.get(next_id) in stop_words:
                 break
 
+        # Convert IDs to tokens and string if id2token is provided
         if id2token is not None:
-            generated_tokens = [id2token[i] for i in generated_ids]
-            return generated_ids, generated_tokens
+            generated_tokens = [id2token.get(i, "UNK") for i in generated_ids]
+            generated_text = " ".join(generated_tokens)
+            return generated_ids, generated_tokens, generated_text
 
         return generated_ids
-
-    # -------------- PERPLEXITY METRIC ------------------
-    def compute_perplexity(self, data_ids):
-        """
-        Computes the perplexity of the model on a given dataset.
-
-        Args:
-            data_ids (list[int]): sequence of token ids to evaluate.
-
-        Returns:
-            float: perplexity score (lower is better).
-        """
-        X_batch, y_batch = get_batch(
-            data_ids, block_size=self.block_size, batch_size=self.batch_size
-        )
-        logits = self.forward(X_batch)
-        loss, _ = self.cross_entropy_loss(logits, y_batch)
-        return float(np.exp(loss))
-
 
 if __name__ == "__main__":
     from llm_project.utils.token_mapping import token_id_mapping
