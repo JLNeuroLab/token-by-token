@@ -158,6 +158,7 @@ class LM_Pipeline:
                 lr=self.trainer.lr,
                 patience=getattr(self.config, "patience", 3),
                 force_retrain=force_retrain,
+
             )
             self.model = self.trainer.model
 
@@ -210,7 +211,7 @@ class LM_Pipeline:
         # STEP 3: train model
         self.setup_trainer(train_tokens=train_tokens, 
                            val_tokens=valid_tokens, 
-                           batch_size=getattr(self.config, "batch_size", 32),
+                           batch_size=getattr(self.config, "batch_size", 64),
                            force_retrain=force_retrain_model, 
                            max_k=max_k)
         return self.model, train_tokens, valid_tokens
@@ -289,7 +290,9 @@ class LM_Pipeline:
                 prompt_ids,
                 max_new_tokens=max_length,
                 block_size=self.config.block_size,
-                id2token=self.id2token
+                id2token=self.id2token,
+                top_k=50,
+                top_p=0.9
             )
             return generated_text
 
@@ -306,8 +309,8 @@ if __name__ == "__main__":
     neural_config = NeuralConfig(n=3, 
                                  device="cpu",
                                  vocab_size=None,
-                                 embd_dim=64,
-                                 block_size=5,
+                                 embd_dim=256,
+                                 block_size=8,
     )
     pipeline_neural = LM_Pipeline("neural", 
                                   neural_config, 
@@ -316,9 +319,9 @@ if __name__ == "__main__":
     model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
                                                                             train_text, 
                                                                             valid_text, 
-                                                                            max_k=2000, 
-                                                                            force_retrain_tokenizer=False, 
-                                                                            force_retrain_model=False, 
+                                                                            max_k=800, 
+                                                                            force_retrain_tokenizer=True, 
+                                                                            force_retrain_model=True, 
                                                                             train_limit=100000, 
                                                                             valid_limit=10000
     )
