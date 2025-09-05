@@ -1,19 +1,24 @@
-from llm_project.models.configs.configs import NgramConfig
+
+# -------------- GPT IMPORTS ----------------
+from llm_project.models.configs.configs import GptConfig
+from llm_project.models.gpt.trainer import GptTrainer
+# -------------- FILE IMPORTS ----------------
 from llm_project.utils.dataloader import load_shakespeare
-from llm_project.utils.file_manager import load_tokenizer, save_tokenizer, get_project_root, get_model_path
 from llm_project.utils.file_manager import (
     load_tokenizer,
     save_tokenizer,
     get_project_root,
-)
+    get_model_path,
+)  # -------------- NGRAM IMPORTS ----------------
+from llm_project.models.configs.configs import NgramConfig
+from llm_project.models.ngrams.trainer import NGramTrainer
+# -------------- NEURAL IMPORTS ----------------
+# -------------- BPE IMPORTS ----------------
+from llm_project.bpe.bytepair_encoding import BPE
+# -------------- OTHER IMPORTS ----------------
+from llm_project.utils.debugg_utils import Colors
 import os
 import matplotlib.pyplot as plt
-from llm_project.models.ngrams.trainer import NGramTrainer
-from llm_project.bpe.bytepair_encoding import BPE
-from llm_project.utils.file_manager import load_tokenizer, save_tokenizer, get_project_root, get_model_path, save_model
-from llm_project.utils.dataloader import load_shakespeare
-from llm_project.models.configs.configs import NgramConfig
-from llm_project.utils.debugg_utils import Colors
 
 
 class LM_Pipeline:
@@ -136,7 +141,7 @@ class LM_Pipeline:
                 f"Model type '{self.model_type}' not implemented")
 
         if model_type == "gpt":
-            ngram_trainer = GPTTrainer(
+            ngram_trainer = GptTrainer(
                 config=self.config, model=None, tokens=train_tokens, k=max_k
             )
             self.model = ngram_trainer.train(
@@ -160,13 +165,25 @@ class LM_Pipeline:
         valid_limit=1000):
 
     def train(self,
-            train_text=None,
-            valid_text=None,
-            max_k=2000,
-            force_retrain_tokenizer=False,  # -> Handle force_retrain of bpe
-            force_retrain_model=False,  # -> Handle force_retrain of the model
-            train_limit=10000,
-            valid_limit=1000):
+        Train_text=train_text
+        train_text=None,
+        # -> Handle force_retrain of bpe force_retrain_model=False, # -> Handle force_retrain of the model train_limit=10000, valid_limit=1000):
+        valid_text=None, max_k=2000, force_retrain_tokenizer=False,
+
+        valid_text=valid_text,
+        max_k=800,
+        force_retrain_tokenizer=True,
+        force_retrain_model=True,
+        train_limit=100000,
+        valid_limit=10000
+    )
+        train_text = None,
+        valid_text = None,
+        max_k = 2000,
+        force_retrain_tokenizer = False,  # -> Handle force_retrain of bpe
+        force_retrain_model = False,  # -> Handle force_retrain of the model
+        train_limit = 10000,
+        valid_limit = 1000):
         """Full automatic pipeline: tokenizer → tokens → trainer → model"""
 
         if train_text is None:
@@ -174,9 +191,9 @@ class LM_Pipeline:
 
         # STEP 1: tokenizer + train tokens
         train_tokens = self.prepare_tokens(train_text=train_text,
-                                            max_k=max_k,
-                                            force_retrain=force_retrain_tokenizer,
-                                            train_limit=train_limit)
+                                            max_k = max_k,
+                                            force_retrain = force_retrain_tokenizer,
+                                            train_limit = train_limit)
         print(f"DEBUG: train_tokens length = {len(train_tokens)}")
 
         # STEP 2: valid tokens
@@ -192,37 +209,39 @@ class LM_Pipeline:
                 print(f"DEBUG: valid_tokens length = {len(valid_tokens)}")
 
         # STEP 3: train model
-        self.setup_trainer(train_tokens=train_tokens, force_retrain=force_retrain_model, max_k=max_k)
+        self.setup_trainer(train_tokens=train_tokens,
+                           force_retrain = force_retrain_model, max_k = max_k)
         return self.model, train_tokens, valid_tokens
 
     def generate(self, prompt, max_length=50, from_pretrained=False):
         """
         Generate a sequence of tokens starting from a prompt using the selected LM.
-        
+
         Args:
             prompt (str or list): Prompt text or token list.
             max_length (int): Maximum number of tokens to generate.
             from_pretrained (bool): If True, attempt to load a pre-trained model from final folder.
-            
+
         Returns:
             list: Generated token sequence.
         """
         # --- Ensure prompt is tokenized ---
         if isinstance(prompt, str):
             if self.tokenizer is None:
-                raise ValueError("Tokenizer is not initialized. Cannot encode string prompt.")
-            prompt_tokens = self.tokenizer.BPE_segmenter(prompt)
+                raise ValueError(
+                    "Tokenizer is not initialized. Cannot encode string prompt.")
+            prompt_tokens= self.tokenizer.BPE_segmenter(prompt)
         else:
-            prompt_tokens = prompt
+            prompt_tokens= prompt
 
         # --- Load pre-trained model if requested ---
         if from_pretrained:
             if self.model_type.lower() == "ngram":
-                model_fname = f"ngram_model_n{self.config.n}_k{self.tokenizer.max_k}.pkl"
-                model_folder = get_model_path(self.project_root, 
-                                              category="models", 
-                                              subdir="ngram", 
-                                              final=True
+                model_fname= f"ngram_model_n{self.config.n}_k{self.tokenizer.max_k}.pkl"
+                model_folder = get_model_path(self.project_root,
+                                              category = "models", 
+                                              subdir = "ngram", 
+                                              final = True
                                 )
                 model_path = os.path.join(model_folder, model_fname)
                 if os.path.exists(model_path):
