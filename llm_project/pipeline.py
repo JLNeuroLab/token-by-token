@@ -205,8 +205,8 @@ class LM_Pipeline:
             max_k=2000,
             force_retrain_tokenizer=False,  # -> Handle force_retrain of bpe
             force_retrain_model=False,  # -> Handle force_retrain of the model
-            train_limit=10000,
-            valid_limit=1000
+            train_limit=None,
+            valid_limit=None
             ):
         
         """Full automatic pipeline: tokenizer → tokens → trainer → model"""
