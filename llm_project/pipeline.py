@@ -393,7 +393,7 @@ if __name__ == "__main__":
                                                                                 valid_text, 
                                                                                 max_k=1000, 
                                                                                 force_retrain_tokenizer=False, 
-                                                                                force_retrain_model=False, 
+                                                                                force_retrain_model=True, 
                                                                                 train_limit=10000, 
                                                                                 valid_limit=1000
         )

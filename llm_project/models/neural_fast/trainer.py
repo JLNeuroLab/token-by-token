@@ -6,7 +6,7 @@ import os
 import matplotlib.pyplot as plt
 from llm_project.utils.debugg_utils import Colors
 from llm_project.models.neural_fast.model import NeuralLanguageModel
-from llm_project.utils.file_manager import get_project_root, load_model, save_model
+from llm_project.utils.file_manager import get_project_root, load_model, save_model, get_model_path
 
 
 class NeuralTrainer:
@@ -182,7 +182,8 @@ class NeuralTrainer:
         ax.set_title("Perplexity over dataset")
         ax.grid(True, linestyle="--", alpha=0.5)
         ax.legend()
-        save_path = os.path.join(self.root, filename)
+        model_path = get_model_path(self.root, self.model_dir)
+        save_path = os.path.join(model_path, filename)
         fig.savefig(save_path, bbox_inches="tight", dpi=150)
         plt.close(fig)
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity plot saved to {save_path}")
