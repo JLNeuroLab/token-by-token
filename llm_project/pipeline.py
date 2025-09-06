@@ -143,13 +143,6 @@ class LM_Pipeline:
             if val_tokens:
                 self.trainer.val_ids = [self.token_to_id[tok] for tok in val_tokens if tok in self.token_to_id]
 
-            if self.trainer.model is None:
-                self.trainer.model = NeuralEmbed(
-                    n=self.config.n,
-                    vocab_size=len(self.token_to_id),
-                    embd_dim=self.config.embd_dim
-                )
-
             self.trainer.id2token = self.id2token
             self.trainer.token2id = self.token_to_id
 
@@ -310,7 +303,7 @@ if __name__ == "__main__":
     train_text = load_shakespeare(version="train")
     valid_text = load_shakespeare(version="validation")
 
-    model = "ngram"
+    model = "neural"
 
     if model == "ngram":
     # --- Ngram model ---
