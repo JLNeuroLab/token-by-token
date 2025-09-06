@@ -54,28 +54,36 @@ python main.py
 ## 2. Project Structure
 ```
 📦 LLM_project/
-├────── 📂 configs/
 ├────── 📂 data/
 │       ├────── 📂 processed/
 │       └────── 📂 raw/
+├────── 📂 docs/
 ├────── 📂 experiments/
 ├────── 📂 llm_project/
 │       ├────── 📂 bpe/
 │       ├────── 📂 models/
+│       │       ├────── 📂 configs/
 │       │       ├────── 📂 gpt/
-│       │       ├────── 📂 neural_ngrams/
+│       │       ├────── 📂 neural_embeddings/
+│       │       ├────── 📂 neural_fast/
 │       │       └────── 📂 ngrams/
 │       └────── 📂 utils/
 ├────── 📂 tests/
-├────── 📄 experiments.txt
+│       ├────── 📂 bpe/
+│       ├────── 📂 gpt/
+│       ├────── 📂 ngram/
+│       ├────── 📂 test_ngram/
+│       └────── 📂 utils/
+├────── 📄 main.py
 ├────── 📄 pyproject.toml
 ├────── 📄 README.md
 └────── 📄 requirements.txt
+
+
 ```
 
 ### 2.1 Project Tree Explained
-
-- **configs/** → configuration files for experiments and hyperparameters.  
+ 
 - **data/** → contains raw and preprocessed Shakespeare texts.  
   - **raw/** → original text files.  
   - **processed/** → tokenized and preprocessed datasets ready for training.  
@@ -83,12 +91,14 @@ python main.py
 - **llm_project/** → core library of the project:  
   - **bpe/** → Byte Pair Encoding utilities.  
   - **models/** → contains the three model implementations:  
+    - **configs/** → configuration files for experiments and hyperparameters. 
     - **gpt/** → GPT-based transformer model.  
     - **neural_ngrams/** → neural n-gram implemented in NumPy.  
     - **ngrams/** → classic n-gram implementation.  
   - **utils/** → helper functions, dataloaders, and plotting utilities.  
 - **tests/** → unit tests to verify the functionality of different components.  
 - **experiments.txt** → notes and logs from experiment runs.  
+- **main.py** → main entry point of the project; used to train models and generate text.  
 - **pyproject.toml** → project configuration for Python packaging.  
 - **README.md** → this document.  
 - **requirements.txt** → Python dependencies needed for the project.
@@ -166,6 +176,29 @@ Best Lambdas: [0.1, 0.6, 0.3] with Perplexity: 451.3941
 
 ---
 
+#### BPE Vocabulary Search (max k)
+
+To evaluate the impact of BPE vocabulary size, we trained the n-gram model with different values of *k* (number of merge operations).
+
+**Results:**
+
+| k (BPE merges) | Validation Perplexity |
+|----------------|------------------------|
+| 200            | **138.43**             |
+| 600            | 353.42                 |
+| 1000           | 575.29                 |
+
+**Observations:**
+- The optimal vocabulary size was found at *k=200*, which achieved the lowest perplexity.  
+- Larger vocabularies (k=600 and k=1000) degraded performance, likely because the model cannot generalize well with too many rare subword units.  
+- We therefore selected **k=200** as the reference vocabulary size for subsequent GPT experiments.
+
+**Plots**
+
+**K tuning / Validation Comparison:**  
+![Classic n-gram Perplexity](docs/ngram/PPL_vs_k_(n=3).png)
+
+---
 ### 4.2 Neural n-gram Model
 
 The **neural n-gram model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
@@ -203,14 +236,66 @@ The **GPT-based model** leverages transformers and causal self-attention to mode
 
 - Perplexity (validation set): TBD  
 - Observations: Best performance overall; generates fluent, stylistically faithful text resembling Shakespeare.
+---
+#### GPT Experiments – Selected Models
 
-**Plots:**
+To evaluate the GPT models, we selected the baseline and the best experiments trained for the same number of iterations (5,000) for a fair comparison, plus an additional long-training experiment showing the potential of extended training.  
 
-**Training Loss Curve:**  
-![GPT Loss](docs/gpt/loss_curve.png)
+**Note:** All GPT experiments use **max_k=200**, the BPE vocabulary size found optimal during the classic n-gram experiments.
 
-**Perplexity over Epochs / Validation Comparison:**  
-![GPT Perplexity](docs/gpt/val_perplexity.png)
+| Rank | Experiment Name           | Embedding Dim | Layers | Dropout | Learning Rate | Max k | Final Val Loss | Notes |
+|------|---------------------------|---------------|--------|---------|---------------|-------|----------------|-------|
+| 0    | A_Baseline                | 128           | 4      | 0.2     | N/A           | 200   | 2.9905         | Baseline for comparison |
+| 1    | B_Embedding_Sweep_384     | 384           | 4      | 0.2     | N/A           | 200   | 2.6765         | Larger embedding improved performance |
+| 2    | B_Embedding_Sweep_256     | 256           | 4      | 0.2     | N/A           | 200   | 2.7401         | Moderate embedding size, good trade-off |
+| 3    | E_LearningRate_Sweep_High | 128           | 4      | 0.2     | 0.0006        | 200   | 2.8885         | Higher learning rate slightly improves results |
 
-**Vocabulary Growth:**  
-![GPT Vocabulary](experiments/saved_models/gpt/vocabulary_growth.png)
+**Additional Note:**  
+- `Z_Long_Training_Best_Guess` (15,000 iterations, embedding 256, 6 layers) achieved the **lowest validation loss (2.6106)**, but the improvement is largely due to the longer training schedule.
+- All other experiments were run for 5,000 iterations to allow a **fair comparison of architecture and hyperparameters**.
+
+--- 
+#### Plots – Selected GPT Experiments
+
+**Baseline (A_Baseline)**  
+**Training Loss Curve** – shows the decrease in training loss over 5,000 iterations.  
+![A_Baseline Loss Curve](docs/gpt/A_Baseline/loss_curve.png)  
+
+**Validation Perplexity** – tracks model perplexity on the validation set over training iterations.  
+![A_Baseline Validation Perplexity](docs/gpt/A_Baseline/val_perplexity.png)  
+
+---
+
+**B_Embedding_Sweep_384**  
+**Training Loss Curve** – demonstrates faster convergence thanks to the larger embedding size.  
+![B_Embedding_Sweep_384 Loss Curve](docs/gpt/B_Embedding_Sweep_384/loss_curve.png)  
+
+**Validation Perplexity** – shows how validation perplexity improves with larger embeddings.  
+![B_Embedding_Sweep_384 Validation Perplexity](docs/gpt/B_Embedding_Sweep_384/val_perplexity.png)  
+
+---
+
+**B_Embedding_Sweep_256**  
+**Training Loss Curve** – visualizes training dynamics with moderate embedding size.  
+![B_Embedding_Sweep_256 Loss Curve](docs/gpt/B_Embedding_Sweep_256/loss_curve.png)  
+
+**Validation Perplexity** – tracks perplexity, showing a good trade-off between performance and model size.  
+![B_Embedding_Sweep_256 Validation Perplexity](docs/gpt/B_Embedding_Sweep_256/val_perplexity.png)  
+
+---
+
+**E_LearningRate_Sweep_High**  
+**Training Loss Curve** – illustrates the effect of a higher learning rate on convergence.  
+![E_LearningRate_Sweep_High Loss Curve](docs/gpt/E_LearningRate_Sweep_High/loss_curve.png)  
+
+**Validation Perplexity** – shows validation perplexity dynamics with a slightly higher learning rate.  
+![E_LearningRate_Sweep_High Validation Perplexity](docs/gpt/E_LearningRate_Sweep_High/val_perplexity.png)  
+
+---
+
+**Z_Long_Training_Best_Guess (Extra Long Training)**  
+**Training Loss Curve** – demonstrates long-term convergence and continued improvement over 15,000 iterations.  
+![Z_Long_Training_Best_Guess Loss Curve](docs/gpt/Z_Long_Training_Best_Guess/loss_curve.png)  
+
+**Validation Perplexity** – lowest validation perplexity achieved due to extended training.  
+![Z_Long_Training_Best_Guess Validation Perplexity](docs/gpt/Z_Long_Training_Best_Guess/val_perplexity.png)  
