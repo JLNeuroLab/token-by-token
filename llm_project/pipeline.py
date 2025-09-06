@@ -346,7 +346,7 @@ class LM_Pipeline:
 
 if __name__ == "__main__":
 
-    from llm_project.models.configs.configs import NgramConfig, NeuralConfig
+    from llm_project.models.configs.configs import NgramConfig, NeuralConfig, NeuralFastConfig
 
     train_text = load_shakespeare(version="train")
     valid_text = load_shakespeare(version="validation")
@@ -378,7 +378,7 @@ if __name__ == "__main__":
 
     elif model == "neuralfast":
     # --- Neural N-gram ---
-        neural_config = NeuralConfig(n=3, 
+        neural_config = NeuralFastConfig(n=3, 
                                     device=None,
                                     vocab_size=None,
                                     embd_dim=256,
