@@ -4,11 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from llm_project.utils.dataloader import load_shakespeare
 from llm_project.utils.file_manager import save_model, load_model, get_model_path, get_project_root
-from llm_project.models.neural_ngrams.model import NeuralNgram
+from llm_project.models.neural_embeddings.model import NeuralNgram
 from llm_project.utils.debugg_utils import Colors
 
 
-class NeuralNgramTrainer:
+class NeuralEmbedTrainer:
     def __init__(
         self,
         model,
@@ -338,7 +338,7 @@ class NeuralNgramTrainer:
 
 if __name__ == "__main__":
     from llm_project.models.configs.configs import NeuralConfig
-    from llm_project.models.neural_ngrams.trainer import NeuralNgramTrainer
+    from llm_project.models.neural_embeddings.trainer import NeuralNgramTrainer
 
     # --- Hyperparameters ---
     embedding_dim = 8

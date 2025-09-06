@@ -133,7 +133,7 @@ class NeuralConfig(BaseConfig):
             print(f"{k}, {v}")
 
 
-class NeuralConfigFast(BaseConfig):
+class NeuralFastConfig(BaseConfig):
     def __init__(
         self,
         n,

@@ -154,7 +154,7 @@ class NGramTrainer:
 
         # Save model and get full path
         saved_path = self._save_state(
-            subdir="ngram", filename=model_fname, final=self.final
+            subdir="ngram", filename=model_fname, final=final
         )
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {saved_path}")
 

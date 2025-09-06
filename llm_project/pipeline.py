@@ -1,4 +1,3 @@
-from llm_project.models.configs.configs import NgramConfig, NeuralConfig
 from llm_project.utils.dataloader import load_shakespeare
 from llm_project.utils.file_manager import (
     load_tokenizer,
@@ -9,8 +8,8 @@ from llm_project.utils.file_manager import (
 import os
 import matplotlib.pyplot as plt
 from llm_project.models.ngrams.trainer import NGramTrainer
-from llm_project.models.neural_ngrams.trainer import NeuralNgramTrainer
-from llm_project.models.neural_ngrams.model import NeuralNgram
+from llm_project.models.neural_embeddings.trainer import NeuralEmbedTrainer
+from llm_project.models.neural_embeddings.model import NeuralEmbed
 from llm_project.models.gpt.train import GptTrainer
 from llm_project.bpe.bytepair_encoding import BPE
 from llm_project.utils.debugg_utils import Colors
@@ -120,11 +119,12 @@ class LM_Pipeline:
                 tokens=train_tokens,
                 k=max_k
             )
+            self.trainer.train()
             self.trainer.final = self.final
             self.model = self.trainer.model
 
         elif model_type == "neural":
-            self.trainer = NeuralNgramTrainer(
+            self.trainer = NeuralEmbedTrainer(
                 model=None,
                 batch_size=batch_size,
                 epochs=3,
@@ -144,7 +144,7 @@ class LM_Pipeline:
                 self.trainer.val_ids = [self.token_to_id[tok] for tok in val_tokens if tok in self.token_to_id]
 
             if self.trainer.model is None:
-                self.trainer.model = NeuralNgram(
+                self.trainer.model = NeuralEmbed(
                     n=self.config.n,
                     vocab_size=len(self.token_to_id),
                     embd_dim=self.config.embd_dim
@@ -254,7 +254,7 @@ class LM_Pipeline:
                     print("No pre-trained N-gram model found in final folder. Using current model.")
             
             else:
-                raise NotImplemented("No other model ready from retrieving pretrained models")
+                raise NotImplementedError("No other model ready from retrieving pretrained models")
 
         # --- Check that model exists ---
         if self.model is None:
@@ -286,13 +286,15 @@ class LM_Pipeline:
             # Convert prompt tokens -> ids
             prompt_ids = [self.token_to_id[tok] for tok in prompt_tokens if tok in self.token_to_id]
 
+            unk_id = self.token_to_id.get("UNK", None)
             generated_ids, generated_tokens, generated_text = self.model.generate(
                 prompt_ids,
                 max_new_tokens=max_length,
                 block_size=self.config.block_size,
                 id2token=self.id2token,
                 top_k=50,
-                top_p=0.9
+                top_p=0.9,
+                unk_id=unk_id
             )
             return generated_text
 
@@ -302,32 +304,62 @@ class LM_Pipeline:
 # ------------------ TEST -------------------
 
 if __name__ == "__main__":
+
+    from llm_project.models.configs.configs import NgramConfig, NeuralConfig
+
     train_text = load_shakespeare(version="train")
     valid_text = load_shakespeare(version="validation")
 
-    # --- Neural N-gram ---
-    neural_config = NeuralConfig(n=3, 
-                                 device="cpu",
-                                 vocab_size=None,
-                                 embd_dim=256,
-                                 block_size=8,
-    )
-    pipeline_neural = LM_Pipeline("neural", 
-                                  neural_config, 
-                                  final=False)
+    model = "ngram"
+
+    if model == "ngram":
+    # --- Ngram model ---
+        ngram_config = NgramConfig(n=3,
+                               device="cpu",
+                               lambdas=None)
     
-    model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
-                                                                            train_text, 
-                                                                            valid_text, 
-                                                                            max_k=800, 
-                                                                            force_retrain_tokenizer=True, 
-                                                                            force_retrain_model=True, 
-                                                                            train_limit=100000, 
-                                                                            valid_limit=10000
-    )
+        ngram_pipeline = LM_Pipeline(model_type=model,
+                                    config=ngram_config,
+        )
+        ngram_pipeline.train(train_text=train_text,
+                             valid_text=valid_text,
+                             max_k=2000,
+                             force_retrain_model=False,
+                             force_retrain_tokenizer=False,
+                             train_limit=10000,
+                             valid_limit=1000,
+                        )
+        
+        prompt = "To be, or not to be"
+        generated_ngram = ngram_pipeline.generate(prompt, max_length=50, from_pretrained=False)
+        print("\n N-gram generated text:")
+        print(generated_ngram)
 
-    prompt = "To be, or not to be"
+    elif model == "neural":
+    # --- Neural N-gram ---
+        neural_config = NeuralConfig(n=3, 
+                                    device="cpu",
+                                    vocab_size=None,
+                                    embd_dim=256,
+                                    block_size=8,
+        )
+        pipeline_neural = LM_Pipeline("neural", 
+                                    neural_config, 
+                                    final=False)
+        
+        model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
+                                                                                train_text, 
+                                                                                valid_text, 
+                                                                                max_k=1000, 
+                                                                                force_retrain_tokenizer=False, 
+                                                                                force_retrain_model=False, 
+                                                                                train_limit=10000, 
+                                                                                valid_limit=1000
+        )
 
-    generated_neural = pipeline_neural.generate(prompt, max_length=50, from_pretrained=False)
-    print("\nNeural N-gram generated text:")
-    print(generated_neural)
+        prompt = "To be, or not to be"
+        generated_neural = pipeline_neural.generate(prompt, 
+                                                max_length=50, 
+                                                from_pretrained=False)
+        print("\nNeural N-gram generated text:")
+        print(generated_neural)
