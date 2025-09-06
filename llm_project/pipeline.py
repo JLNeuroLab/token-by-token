@@ -8,6 +8,7 @@ from llm_project.utils.file_manager import (
 import os
 import matplotlib.pyplot as plt
 from llm_project.models.ngrams.trainer import NGramTrainer
+from llm_project.models.neural_fast.trainer import NeuralTrainer
 from llm_project.models.neural_embeddings.trainer import NeuralEmbedTrainer
 from llm_project.models.gpt.train import GptTrainer
 from llm_project.bpe.bytepair_encoding import BPE
@@ -20,6 +21,7 @@ class LM_Pipeline:
         self.config = config
         self.tokenizer = tokenizer
         self.device = self.config.device
+        print(f"[INFO] Using device: {self.device}")
         self.model = None
         self.trainer = None
         self.project_root = project_root or get_project_root()
@@ -154,6 +156,36 @@ class LM_Pipeline:
             )
             self.model = self.trainer.model
 
+        elif model_type == "neuralfast":
+            self.trainer = NeuralTrainer(
+                model=None,
+                batch_size=batch_size,
+                epochs=3,
+                lr = 0.01,
+                tokens=train_tokens,
+                train_text=None,
+                valid_text=None,
+                config=self.config,
+                max_k=max_k,
+                root=self.project_root,
+                print_every=50,
+                patience=3
+            )
+
+            # Converte tokens → ids
+            self.trainer.train_ids = [self.token_to_id[tok] for tok in train_tokens if tok in self.token_to_id]
+            if val_tokens:
+                self.trainer.valid_ids = [self.token_to_id[tok] for tok in val_tokens if tok in self.token_to_id]
+
+            self.trainer.id2token = self.id2token
+            self.trainer.token2id = self.token_to_id
+
+            self.trainer.train(
+                epochs=self.trainer.epochs,
+                force_retrain=force_retrain,
+            )
+            self.model = self.trainer.model
+
         elif model_type == "gpt":
             ngram_trainer = GptTrainer(
                 config=self.config, model=None, tokens=train_tokens, k=max_k
@@ -274,6 +306,7 @@ class LM_Pipeline:
         if self.model_type.lower() == "ngram":
             generated_text = self.model.generate_text(prompt_tokens, max_length=max_length)
             return generated_text
+        
         elif self.model_type.lower() == "neural":
             # Convert prompt tokens -> ids
             prompt_ids = [self.token_to_id[tok] for tok in prompt_tokens if tok in self.token_to_id]
@@ -289,6 +322,22 @@ class LM_Pipeline:
                 unk_id=unk_id
             )
             return generated_text
+        
+        elif self.model_type.lower() == "neuralfast":
+            # Convert prompt tokens -> ids
+            prompt_ids = [self.token_to_id[tok] for tok in prompt_tokens if tok in self.token_to_id]
+
+            unk_id = self.token_to_id.get("UNK", None)
+            generated, generated_tokens, generated_text = self.model.generate(
+                prompt_ids,
+                max_new_tokens=max_length,
+                block_size=self.config.block_size,
+                top_k=50,
+                top_p=0.9,
+                unk_id=unk_id,
+                id2token=self.id2token
+            )
+            return generated_text
 
 
         raise NotImplementedError(f"Generation for model type '{self.model_type}' is not implemented.")
@@ -302,7 +351,7 @@ if __name__ == "__main__":
     train_text = load_shakespeare(version="train")
     valid_text = load_shakespeare(version="validation")
 
-    model = "neural"
+    model = "neuralfast"
 
     if model == "ngram":
     # --- Ngram model ---
@@ -326,6 +375,35 @@ if __name__ == "__main__":
         generated_ngram = ngram_pipeline.generate(prompt, max_length=50, from_pretrained=False)
         print("\n N-gram generated text:")
         print(generated_ngram)
+
+    elif model == "neuralfast":
+    # --- Neural N-gram ---
+        neural_config = NeuralConfig(n=3, 
+                                    device="cpu",
+                                    vocab_size=None,
+                                    embd_dim=256,
+                                    block_size=8,
+        )
+        pipeline_neural = LM_Pipeline("neuralfast", 
+                                    neural_config, 
+                                    final=False)
+        
+        model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
+                                                                                train_text, 
+                                                                                valid_text, 
+                                                                                max_k=1000, 
+                                                                                force_retrain_tokenizer=False, 
+                                                                                force_retrain_model=False, 
+                                                                                train_limit=10000, 
+                                                                                valid_limit=1000
+        )
+
+        prompt = "To be, or not to be"
+        generated_neural = pipeline_neural.generate(prompt, 
+                                                max_length=100, 
+                                                from_pretrained=False)
+        print("\nNeural N-gram generated text:")
+        print(generated_neural)
 
     elif model == "neural":
     # --- Neural N-gram ---
@@ -351,7 +429,10 @@ if __name__ == "__main__":
 
         prompt = "To be, or not to be"
         generated_neural = pipeline_neural.generate(prompt, 
-                                                max_length=50, 
+                                                max_length=100, 
                                                 from_pretrained=False)
         print("\nNeural N-gram generated text:")
         print(generated_neural)
+
+
+    

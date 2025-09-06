@@ -265,7 +265,7 @@ class NeuralEmbed:
             # Use last 'block_size' tokens as context
             context = generated_ids[-block_size:] if block_size is not None else generated_ids
             X = np.array(context, dtype=np.int64)[None, :]  # shape: (1, block_size)
-            logits = self.forward(X)[0, -1]  # take logits of last token
+            logits = self.forward(X)[0, -1]  # take logits of last token 
 
             # Sample next token using top-k / top-p / temperature
             next_id = self.predict_next_token_sampling(

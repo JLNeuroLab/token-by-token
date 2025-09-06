@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import os
 import matplotlib.pyplot as plt
 from llm_project.utils.debugg_utils import Colors
+from llm_project.models.neural_fast.model import NeuralLanguageModel
 from llm_project.utils.file_manager import get_project_root, load_model, save_model
 
 
@@ -26,6 +27,7 @@ class NeuralTrainer:
                  patience=3):
 
         self.config = config
+        self.device = self.config.device
         self.model = model
         self.epochs = epochs
         self.lr = lr
@@ -45,10 +47,9 @@ class NeuralTrainer:
         self.valid_ids = None
 
         self.root = root or get_project_root()
-        self.model_dir = os.path.join(self.root, "experiments", "models", "neural_ngrams")
+        self.model_dir = os.path.join(self.root, "experiments", "models", "neuralfast")
         os.makedirs(self.model_dir, exist_ok=True)
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         self.checkpoints = []
 
         self.id2token = None
@@ -63,41 +64,70 @@ class NeuralTrainer:
             y_block = data_ids[start_idx + 1 : start_idx + self.block_size + 1]
             X.append(x_block)
             y.append(y_block)
-        return torch.tensor(X, dtype=torch.long), torch.tensor(y, dtype=torch.long)
+        X = torch.tensor(X, dtype=torch.long).to(self.device)
+        y = torch.tensor(y, dtype=torch.long).to(self.device)
+        return X, y
 
-    # ------------------- SAVE / LOAD -------------------
-    def _save_state(self, subdir=None, filename="best_model.pkl", final=False):
+   # ------------------- SAVE / LOAD -------------------
+    def _save_state(self, subdir=None, filename=None, final=None):
+        """
+        Salva lo stato completo del modello, optimizer, vocab e config.
+        """
+        final_flag = final if final is not None else getattr(self, "final", False)
+        # Se non viene passato subdir, scegli il percorso corretto
+        model_subdir = "neuralfast"
+        target_subdir = os.path.join(model_subdir, "checkpoints") if not final_flag else os.path.join(model_subdir, "final")
+        # Crea lo stato da salvare
         state = {
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'id2token': self.id2token,
-            'token2id': self.token2id
+            "model": self.model,
+            "optimizer": self.optimizer,
+            "id2token": getattr(self, "id2token", None),
+            "token2id": getattr(self, "token2id", None),
+            "config": self.config
         }
-        saved_path = save_model(
+
+        full_path = save_model(
             state,
             root=self.root,
             category="models",
-            subdir=subdir,
+            subdir=target_subdir,
             filename=filename,
-            final=final
+            final=final_flag
         )
-        print(f"[OK] Model saved to {saved_path}")
-        return saved_path
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to {full_path}")
+        return full_path
 
-    def _load_state(self, filename="best_model.pkl", subdir=None, final=False):
+
+    def _load_state(self, filename=None, final=False, subdir=None):
+        """
+        Carica lo stato completo del modello, optimizer, vocab e config.
+        """
+        final_flag = final if final is not None else getattr(self, "final", False)
+        filename = filename or "best_model.pkl"
+        # Usa il subdir passato oppure default coerente con final_flag
+        target_subdir = subdir or os.path.join("neuralfast", "final" if final else "checkpoints")
+
         state = load_model(
             root=self.root,
-            filename=filename,
             category="models",
-            subdir=subdir,
-            final=final
+            subdir=target_subdir,
+            filename=filename,
+            final=final_flag
         )
-        self.model.load_state_dict(state['model_state_dict'])
-        self.optimizer.load_state_dict(state['optimizer_state_dict'])
-        self.id2token = state.get('id2token', None)
-        self.token2id = state.get('token2id', None)
-        print(f"[OK] Model loaded from {filename}")
+
+        self.model = state["model"].to(self.device)
+        self.optimizer = state["optimizer"]
+        self.id2token = state.get("id2token", None)
+        self.token2id = state.get("token2id", None)
+        self.config = state.get("config", self.config)
+
+        if self.id2token is None or self.token2id is None:
+            raise ValueError(f"{Colors.FAIL}[FAIL]{Colors.ENDC} Loaded model does not contain vocab!")
+
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model loaded from {filename}")
         return self.model
+
+
 
     # ------------------- TRAINING STEP -------------------
     def train_step(self, X_batch, y_batch):
@@ -125,8 +155,8 @@ class NeuralTrainer:
             if not X_batch:
                 continue
 
-            X_batch = torch.tensor(X_batch, dtype=torch.long)
-            y_batch = torch.tensor(y_batch, dtype=torch.long)
+            X_batch = torch.tensor(X_batch, dtype=torch.long).to(self.device)
+            y_batch = torch.tensor(y_batch, dtype=torch.long).to(self.device)
             _, loss = self.model.forward(X_batch, targets=y_batch)
 
             total_loss += loss.item() * X_batch.shape[0]
@@ -158,53 +188,130 @@ class NeuralTrainer:
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity plot saved to {save_path}")
 
     # ------------------- TRAIN LOOP -------------------
-    def train(self, force_retrain=False):
+    def train(
+        self,
+        epochs=None,
+        lr=None,
+        force_retrain=False,
+        patience=3,
+        max_checkpoints=5,
+        final=False
+    
+    ):
+        import numpy as np
+
+        epochs = self.epochs if None else epochs
+        lr = self.lr if None else lr
+        print(f"[INFO] Training for {epochs} epochs, lr={lr}")
+
         # Try loading final model first
+        if self.model is None:
+            if not self.tokens:
+                raise ValueError("Tokens must be set to initialize the model automatically.")
+            print(f"[INFO] Initializing NeuralEmbed model with vocab size {len(self.tokens)}")
+            self.model = NeuralLanguageModel(
+                config=self.config
+            ).to(self.device)
+
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+
         if not force_retrain:
             try:
-                self._load_state(filename="best_model.pkl", subdir="final", final=True)
-                print("[INFO] Loaded existing final model.")
-                return self.batch_perplexity(self.valid_ids) if self.valid_ids else None
-            except FileNotFoundError:
-                print("[INFO] No final model found, training from scratch.")
+                model = self._load_state(filename="best_model.pkl", final=final)
 
+                print(f"{Colors.OKGREEN}[OK]{Colors.ENDC}\n--- Loaded final saved model ---")
+                return model
+            except FileNotFoundError:
+                print(f"{Colors.WARNING}[WARN]{Colors.ENDC} \n--- No final model found, training from scratch ---")
+
+         # ---------------- TRAINING LOOP -------------------
+        train_losses, val_losses = [], []
+        val_perplexities = []
         best_val_loss = float("inf")
         patience_counter = 0
-        val_perplexities = []
+        step = 0
+        checkpoint_list = []
 
-        for epoch in range(1, self.epochs + 1):
-            epoch_loss = 0.0
+        for epoch in range(epochs):
             n_batches = len(self.train_ids) // self.batch_size
+            epoch_loss = 0.0
+
             for _ in range(n_batches):
                 X_batch, y_batch = self.get_batch(self.train_ids)
                 loss = self.train_step(X_batch, y_batch)
+                train_losses.append(loss)
                 epoch_loss += loss
+
+                if step % self.print_every == 0:
+                    print(f"Epoch {epoch+1}/{epochs}, Step {step}, Loss: {loss:.4f}")
+                step += 1
+
             avg_epoch_loss = epoch_loss / n_batches
-            print(f"Epoch {epoch}/{self.epochs} - Avg Loss: {avg_epoch_loss:.4f}")
+            print(f"Epoch {epoch+1}/{epochs} - Avg Train Loss: {avg_epoch_loss:.4f}")
 
-            # Validation
+            # ---------------- VALIDATION -------------------
             if self.valid_ids:
-                val_ppl = self.batch_perplexity(self.valid_ids)
-                val_perplexities.append(val_ppl.item())
-                print(f"Validation Perplexity: {val_ppl:.4f}")
+                X_val, y_val = self.get_batch(self.valid_ids)
+                X_val = X_val.to(self.device)
+                y_val = y_val.to(self.device)
 
-                # Save checkpoint
-                self._save_state(subdir="checkpoints", filename=f"epoch{epoch}_val{val_ppl:.4f}.pkl")
-                if len(self.checkpoints) > self.max_checkpoints:
-                    self.checkpoints.pop(0)
+                self.model.eval()
+                with torch.no_grad():
+                    _, val_loss_tensor = self.model.forward(X_val, targets=y_val)
+                val_loss = val_loss_tensor.item()
+                val_losses.append(val_loss)
+                val_perplexities.append(np.exp(val_loss))
 
-                # Early stopping
-                if val_ppl < best_val_loss:
-                    best_val_loss = val_ppl
+                print(f"Validation Loss: {val_loss:.4f}, Perplexity: {val_perplexities[-1]:.4f}")
+
+                # ---------------- SAVE CHECKPOINT ----------------
+                ckpt_name = f"epoch{epoch+1}_val{val_loss:.4f}.pkl"
+                ckpt_path = self._save_state(subdir="checkpoints", filename=ckpt_name)
+                checkpoint_list.append((val_loss, ckpt_path))
+                checkpoint_list.sort(key=lambda x: x[0])  # sort by validation loss
+
+                # Keep only the best `max_checkpoints`
+                if len(checkpoint_list) > max_checkpoints:
+                    _, remove_ckpt = checkpoint_list.pop(-1)
+                    if os.path.exists(remove_ckpt):
+                        os.remove(remove_ckpt)
+
+                # ---------------- SAVE BEST MODEL ----------------
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    self._save_state(subdir="final", filename="best_model.pkl", final=final)
+                    print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Best model updated at epoch {epoch+1}")
                     patience_counter = 0
-                    self._save_state(subdir="final", filename="best_model.pkl", final=True)
                 else:
                     patience_counter += 1
-                    print(f"[INFO] Patience {patience_counter}/{self.patience}")
-                    if patience_counter >= self.patience:
-                        print(f"[INFO] Early stopping at epoch {epoch}")
-                        break
+                    print(f"No improvement (patience {patience_counter}/{patience})")
 
-        # Final plot
+                # ---------------- EARLY STOPPING ----------------
+                if patience_counter >= patience:
+                    print(f"{Colors.WARNING}[WARN]{Colors.ENDC} Early stopping triggered at epoch {epoch+1}")
+                    break
+
+            if patience_counter >= patience:
+                break
+
+        # ---------------- PLOTTING -------------------
         self.plot_perplexity(train_ids=self.train_ids, val_ids=self.valid_ids)
-        return val_perplexities
+
+        # Plot validation perplexity per epoch
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(val_perplexities, marker="o", label="Validation Perplexity")
+        ax.set_title("Validation Perplexity per Epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Perplexity")
+        ax.grid(True, linestyle="--", alpha=0.6)
+        ax.legend()
+
+        folder = self.model_dir
+        os.makedirs(folder, exist_ok=True)
+        save_path = os.path.join(folder, "val_perplexity_by_epoch.png")
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
+        plt.close(fig)
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}")
+
+        return train_losses, val_losses

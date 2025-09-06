@@ -242,7 +242,7 @@ class NeuralEmbedTrainer:
 
         # ---------------- MODEL INIT ----------------------
         if self.model is None or self.model.vocab_size != len(self.tokens):
-            print("Initializing model with vocab size:", len(self.tokens))
+            print("Initializing model with vocab size:", len(self.tokens)) 
             self.model = NeuralEmbed(
                 n=self.n,
                 vocab_size=len(self.tokens),
@@ -407,85 +407,3 @@ if __name__ == "__main__":
 
     print("Generated text:", generated_text)
     
-def _batch_loss(self, X_batch, Y_batch):
-    """
-    Computes cross-entropy loss for a single batch.
-    
-    Args:
-        X_batch (np.ndarray): shape (batch_size, block_size)
-        Y_batch (np.ndarray): shape (batch_size, block_size)
-    
-    Returns:
-        float: average loss for this batch
-    """
-    logits = self.model.forward(X_batch)
-    loss, _ = self.model.cross_entropy_loss(logits, Y_batch)
-    return loss
-
-
-def compute_perplexity(self, data_ids):
-    """
-    Computes the perplexity over the entire dataset.
-    
-    Args:
-        data_ids (list[int]): sequence of token ids to evaluate.
-    
-    Returns:
-        float: perplexity score (lower is better)
-    """
-    total_loss = 0.0
-    total_tokens = 0
-
-    # iterate dataset in non-overlapping batches
-    for start_idx in range(0, len(data_ids) - self.block_size, self.block_size):
-        X_batch = []
-        Y_batch = []
-        for i in range(start_idx, min(start_idx + self.batch_size * self.block_size, len(data_ids) - self.block_size), self.block_size):
-            X_batch.append(data_ids[i : i + self.block_size])
-            Y_batch.append(data_ids[i + 1 : i + 1 + self.block_size])
-
-        if not X_batch:
-            continue
-
-        X_batch = np.array(X_batch)
-        Y_batch = np.array(Y_batch)
-        batch_loss = self._batch_loss(X_batch, Y_batch)
-
-        total_loss += batch_loss * X_batch.shape[0]
-        total_tokens += X_batch.shape[0] * self.block_size
-
-    avg_loss = total_loss / total_tokens
-    perplexity = float(np.exp(avg_loss))
-    return perplexity
-
-
-def plot_perplexity(self, train_ids=None, val_ids=None, folder=None, filename="perplexity_curve.png"):
-    """
-    Plots perplexity per epoch using compute_perplexity for global dataset evaluation.
-    """
-    train_ids = train_ids or self.train_ids
-    val_ids = val_ids or self.val_ids
-
-    train_ppl, val_ppl = [], []
-
-    # Compute perplexity globally per epoch
-    train_ppl.append(self.compute_perplexity(train_ids))
-    if val_ids:
-        val_ppl.append(self.compute_perplexity(val_ids))
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.plot(train_ppl, label="Train Perplexity", color="blue")
-    if val_ppl:
-        ax.plot(val_ppl, label="Validation Perplexity", color="red")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Perplexity")
-    ax.set_title("Perplexity over dataset")
-    ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend()
-
-    folder = folder or self.model_dir
-    os.makedirs(folder, exist_ok=True)
-    save_path = os.path.join(folder, filename)
-    fig.savefig(save_path, bbox_inches="tight", dpi=150)
-    plt.close(fig)
-    print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity plot saved to {save_path}")

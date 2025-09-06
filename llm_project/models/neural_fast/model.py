@@ -76,7 +76,16 @@ class NeuralLanguageModel(nn.Module):
         return next_id
 
     @torch.no_grad()
-    def generate(self, start_ids, max_new_tokens=20, stochastic=True, top_k=None, top_p=None, temperature=1.0, unk_id=None):
+    def generate(self, 
+                 start_ids, 
+                 max_new_tokens=20, 
+                 stochastic=True, 
+                 top_k=None, 
+                 top_p=None, 
+                 temperature=1.0,
+                 block_size = None,
+                 id2token = None,
+                 unk_id=None):
         """
         Generate tokens starting from start_ids, using stochastic sampling or greedy.
 
@@ -92,11 +101,13 @@ class NeuralLanguageModel(nn.Module):
         Returns:
             list: Generated token IDs
         """
-        generated = list(start_ids)
+        generated_ids = list(start_ids)
+        context_size = block_size if block_size is not None else self.n
+
         for _ in range(max_new_tokens):
-            context = torch.tensor([generated[-self.n:]], dtype=torch.long)  # (1, L)
-            logits, _ = self.forward(context)                                  # (1, L, C)
-            last_logits = logits[0, -1]                                        # (C,)
+            context = torch.tensor([generated_ids[-context_size:]], dtype=torch.long)
+            logits, _ = self.forward(context)
+            last_logits = logits[0, -1]
 
             if stochastic:
                 next_id = self.predict_next_token_sampling(
@@ -105,6 +116,12 @@ class NeuralLanguageModel(nn.Module):
             else:
                 next_id = torch.argmax(last_logits).item()
 
-            generated.append(next_id)
+            generated_ids.append(next_id)
 
-        return generated
+        # Convert IDs to tokens se id2token fornito
+        if id2token is not None:
+            generated_tokens = [id2token.get(i, "UNK") for i in generated_ids]
+            generated_text = " ".join(generated_tokens)
+            return generated_ids, generated_tokens, generated_text
+
+        return generated_ids
