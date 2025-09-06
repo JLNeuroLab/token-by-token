@@ -9,7 +9,6 @@ import os
 import matplotlib.pyplot as plt
 from llm_project.models.ngrams.trainer import NGramTrainer
 from llm_project.models.neural_embeddings.trainer import NeuralEmbedTrainer
-from llm_project.models.neural_embeddings.model import NeuralEmbed
 from llm_project.models.gpt.train import GptTrainer
 from llm_project.bpe.bytepair_encoding import BPE
 from llm_project.utils.debugg_utils import Colors
