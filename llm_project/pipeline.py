@@ -6,6 +6,7 @@ from llm_project.utils.file_manager import (
     get_model_path
 )
 import os
+import torch
 import matplotlib.pyplot as plt
 from llm_project.models.ngrams.trainer import NGramTrainer
 from llm_project.models.neural_fast.trainer import NeuralTrainer
@@ -326,10 +327,11 @@ class LM_Pipeline:
         elif self.model_type.lower() == "neuralfast":
             # Convert prompt tokens -> ids
             prompt_ids = [self.token_to_id[tok] for tok in prompt_tokens if tok in self.token_to_id]
-
+            device = next(self.model.parameters()).device  # prendi il device corretto dal modello
+            prompt_tensor = torch.tensor([prompt_ids], dtype=torch.long).to(device)
             unk_id = self.token_to_id.get("UNK", None)
             generated, generated_tokens, generated_text = self.model.generate(
-                prompt_ids,
+                prompt_tensor,
                 max_new_tokens=max_length,
                 block_size=self.config.block_size,
                 top_k=50,

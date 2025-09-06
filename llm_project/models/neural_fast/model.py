@@ -105,7 +105,12 @@ class NeuralLanguageModel(nn.Module):
         context_size = block_size if block_size is not None else self.n
 
         for _ in range(max_new_tokens):
-            context = torch.tensor([generated_ids[-context_size:]], dtype=torch.long)
+            device = next(self.parameters()).device
+            if isinstance(generated_ids, torch.Tensor):
+                generated_ids = generated_ids.tolist()
+
+            context_ids = [int(i) for i in generated_ids[-context_size:]]  
+            context = torch.tensor([context_ids], dtype=torch.long, device=device)
             logits, _ = self.forward(context)
             last_logits = logits[0, -1]
 
