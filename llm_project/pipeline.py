@@ -379,7 +379,7 @@ if __name__ == "__main__":
     elif model == "neuralfast":
     # --- Neural N-gram ---
         neural_config = NeuralConfig(n=3, 
-                                    device="cpu",
+                                    device=None,
                                     vocab_size=None,
                                     embd_dim=256,
                                     block_size=8,
