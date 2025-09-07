@@ -35,7 +35,7 @@ def get_batch(data_ids, block_size, batch_size):
     return np.array(X), np.array(y)
 
 
-class NeuralNgram:
+class NeuralEmbed:
     def __init__(self, n, vocab_size, embd_dim=32, seed=35):
         np.random.seed(seed)
         self.n = n
@@ -163,7 +163,7 @@ class NeuralNgram:
         plt.show()
 
     # ---------------- GENERATION -------------------
-    def predict_next_token_sampling(self, logits, top_k=None, top_p=None, temperature=1.0):
+    def predict_next_token_sampling(self, logits, top_k=None, top_p=None, temperature=1.0, unk_id=None):
         """
         Sample the next token from logits using temperature scaling, top-k, and top-p (nucleus) sampling.
 
@@ -214,6 +214,11 @@ class NeuralNgram:
             probs_filtered[nucleus_ids] = nucleus_probs
             probs = probs_filtered
 
+        # --- Filter UNK ---
+        if unk_id is not None:
+            probs[unk_id] = 0.0
+            probs /= np.sum(probs)  # renormalize
+
         # --- Sample the next token from the filtered probabilities ---
         next_id = int(np.random.choice(len(probs), p=probs))
 
@@ -229,7 +234,8 @@ class NeuralNgram:
         temperature=1.0,
         stop_ids=None,
         stop_words=None,
-        block_size=None
+        block_size=None,
+        unk_id = None
     ):
         """
         Generate a sequence of tokens starting from start_ids using top-k / top-p sampling.
@@ -266,7 +272,8 @@ class NeuralNgram:
                 logits,
                 top_k=top_k,
                 top_p=top_p,
-                temperature=temperature
+                temperature=temperature,
+                unk_id=unk_id
             )
 
             generated_ids.append(next_id)
@@ -342,7 +349,7 @@ if __name__ == "__main__":
     print(f"DEBUG: Sample of train_ids: {train_ids[:20]}")
 
     # ---------------- INITIALIZE MODEL -----------------
-    model = NeuralNgram(
+    model = NeuralEmbed(
         n=n, vocab_size=len(token2id), block_size=block_size, batch_size=batch_size
     )
     print(f"DEBUG: Model initialized with vocab size {len(token2id)}")

@@ -4,11 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from llm_project.utils.dataloader import load_shakespeare
 from llm_project.utils.file_manager import save_model, load_model, get_model_path, get_project_root
-from llm_project.models.neural_ngrams.model import NeuralNgram
+from llm_project.models.neural_embeddings.model import NeuralEmbed
 from llm_project.utils.debugg_utils import Colors
 
 
-class NeuralNgramTrainer:
+class NeuralEmbedTrainer:
     def __init__(
         self,
         model,
@@ -123,7 +123,7 @@ class NeuralNgramTrainer:
         )
 
         # Rebuild the model
-        self.model = NeuralNgram(
+        self.model = NeuralEmbed(
             n=model_data["n"],
             vocab_size=model_data["vocab_size"],
             embd_dim=model_data["embd_dim"],
@@ -174,7 +174,7 @@ class NeuralNgramTrainer:
             loss, _ = self.model.cross_entropy_loss(logits, Y_block)
             
             total_loss += loss * X_block.shape[0]  # peso per numero di sequenze
-            total_tokens += X_block.shape[0] * block_size
+            total_tokens += X_block.shape[0] * block_size 
 
         avg_loss = total_loss / total_tokens
         return float(np.exp(avg_loss))
@@ -243,7 +243,7 @@ class NeuralNgramTrainer:
         # ---------------- MODEL INIT ----------------------
         if self.model is None or self.model.vocab_size != len(self.tokens):
             print("Initializing model with vocab size:", len(self.tokens))
-            self.model = NeuralNgram(
+            self.model = NeuralEmbed(
                 n=self.n,
                 vocab_size=len(self.tokens),
                 embd_dim=self.embedding_dim,
@@ -338,7 +338,7 @@ class NeuralNgramTrainer:
 
 if __name__ == "__main__":
     from llm_project.models.configs.configs import NeuralConfig
-    from llm_project.models.neural_ngrams.trainer import NeuralNgramTrainer
+    from llm_project.models.neural_embeddings.trainer import NeuralNgramTrainer
 
     # --- Hyperparameters ---
     embedding_dim = 8
@@ -371,7 +371,7 @@ if __name__ == "__main__":
     )
 
     # --- Initialize trainer ---
-    trainer = NeuralNgramTrainer(
+    trainer = NeuralEmbedTrainer(
         model=None,
         tokens=tokens,
         batch_size=batch_size,
@@ -406,3 +406,86 @@ if __name__ == "__main__":
     )
 
     print("Generated text:", generated_text)
+    
+def _batch_loss(self, X_batch, Y_batch):
+    """
+    Computes cross-entropy loss for a single batch.
+    
+    Args:
+        X_batch (np.ndarray): shape (batch_size, block_size)
+        Y_batch (np.ndarray): shape (batch_size, block_size)
+    
+    Returns:
+        float: average loss for this batch
+    """
+    logits = self.model.forward(X_batch)
+    loss, _ = self.model.cross_entropy_loss(logits, Y_batch)
+    return loss
+
+
+def compute_perplexity(self, data_ids):
+    """
+    Computes the perplexity over the entire dataset.
+    
+    Args:
+        data_ids (list[int]): sequence of token ids to evaluate.
+    
+    Returns:
+        float: perplexity score (lower is better)
+    """
+    total_loss = 0.0
+    total_tokens = 0
+
+    # iterate dataset in non-overlapping batches
+    for start_idx in range(0, len(data_ids) - self.block_size, self.block_size):
+        X_batch = []
+        Y_batch = []
+        for i in range(start_idx, min(start_idx + self.batch_size * self.block_size, len(data_ids) - self.block_size), self.block_size):
+            X_batch.append(data_ids[i : i + self.block_size])
+            Y_batch.append(data_ids[i + 1 : i + 1 + self.block_size])
+
+        if not X_batch:
+            continue
+
+        X_batch = np.array(X_batch)
+        Y_batch = np.array(Y_batch)
+        batch_loss = self._batch_loss(X_batch, Y_batch)
+
+        total_loss += batch_loss * X_batch.shape[0]
+        total_tokens += X_batch.shape[0] * self.block_size
+
+    avg_loss = total_loss / total_tokens
+    perplexity = float(np.exp(avg_loss))
+    return perplexity
+
+
+def plot_perplexity(self, train_ids=None, val_ids=None, folder=None, filename="perplexity_curve.png"):
+    """
+    Plots perplexity per epoch using compute_perplexity for global dataset evaluation.
+    """
+    train_ids = train_ids or self.train_ids
+    val_ids = val_ids or self.val_ids
+
+    train_ppl, val_ppl = [], []
+
+    # Compute perplexity globally per epoch
+    train_ppl.append(self.compute_perplexity(train_ids))
+    if val_ids:
+        val_ppl.append(self.compute_perplexity(val_ids))
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(train_ppl, label="Train Perplexity", color="blue")
+    if val_ppl:
+        ax.plot(val_ppl, label="Validation Perplexity", color="red")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Perplexity")
+    ax.set_title("Perplexity over dataset")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend()
+
+    folder = folder or self.model_dir
+    os.makedirs(folder, exist_ok=True)
+    save_path = os.path.join(folder, filename)
+    fig.savefig(save_path, bbox_inches="tight", dpi=150)
+    plt.close(fig)
+    print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity plot saved to {save_path}")
