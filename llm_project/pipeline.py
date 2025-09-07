@@ -19,6 +19,9 @@ from llm_project.utils.file_manager import (
 # -------------- CONFIG IMPORTS ----------------
 from llm_project.models.configs.configs import NgramConfig, NeuralConfig, GptConfig
 
+# --------------GENERATOR IMPORTS ----------------
+from llm_project.models.gpt.generator import Generator
+
 # -------------- BPE IMPORTS ----------------
 from llm_project.bpe.bytepair_encoding import BPE
 
@@ -140,7 +143,9 @@ class LM_Pipeline:
 
         self.config.vocab_size = len(self.token_to_id)
 
-        # CLASSICAL N-GRAM MODEL
+        ##########################
+        # CLASSICAL N-GRAM MODEL #
+        ##########################
         if model_type == "ngram":
             self.trainer = NGramTrainer(
                 config=self.config, model=None, tokens=train_tokens, k=max_k
@@ -148,7 +153,9 @@ class LM_Pipeline:
             self.trainer.final = self.final
             self.model = self.trainer.model
 
-        # NEURAL N-GRAM MODEL
+        #######################
+        # NEURAL N-GRAM MODEL #
+        #######################
         elif model_type == "neural":
             self.trainer = NeuralNgramTrainer(
                 model=None,
@@ -191,19 +198,25 @@ class LM_Pipeline:
                 force_retrain=force_retrain,
             )
             self.model = self.trainer.model
-        # GPT
+
+        #############
+        # GPT MODEL #
+        #############
         elif model_type == "gpt":
-            ngram_trainer = GptTrainer(
+            self.trainer = GptTrainer(
                 config=self.config, model=None, tokens=train_tokens, k=max_k
             )
-            self.model = ngram_trainer.train(
+            self.model =
+
+            self.train(
                 force_retrain=force_retrain,
                 tune_lambdas=True,
                 train_limit=None,
                 valid_limit=None,
             )
         else:
-            raise NotImplementedError(f"Model type '{self.model_type}' not implemented")
+            raise NotImplementedError(
+                f"Model type '{self.model_type}' not implemented")
 
     def train(
         self,
@@ -234,7 +247,8 @@ class LM_Pipeline:
             valid_text = valid_text[:valid_limit]
         # Applying BPE merges to validation text
 
-        valid_tokens = self.tokenizer.BPE_segmenter(valid_text) if valid_text else None
+        valid_tokens = self.tokenizer.BPE_segmenter(
+            valid_text) if valid_text else None
         if valid_tokens is not None and valid_limit:
             valid_tokens = valid_tokens[:valid_limit]
             print(f"DEBUG: valid_tokens length = {len(valid_tokens)}")
@@ -282,7 +296,8 @@ class LM_Pipeline:
                 )
                 model_path = os.path.join(model_folder, model_fname)
                 if os.path.exists(model_path):
-                    print(f"Loading pre-trained N-gram model from: {model_path}")
+                    print(
+                        f"Loading pre-trained N-gram model from: {model_path}")
                     trainer = NGramTrainer(
                         config=self.config,
                         model=None,
@@ -319,12 +334,14 @@ class LM_Pipeline:
             print(f"model path is: {model_path}")
 
             if os.path.exists(model_path):
-                self.model = self.trainer._load_state(filename=model_path, final=True)
+                self.model = self.trainer._load_state(
+                    filename=model_path, final=True)
                 print(
                     f"[INFO] Loaded saved model automatically from saved_models for generation: {model_path}"
                 )
             else:
-                raise FileNotFoundError(f"No model found in saved_models: {model_path}")
+                raise FileNotFoundError(
+                    f"No model found in saved_models: {model_path}")
 
         # --- Generation for N-gram ---
         if self.model_type.lower() == "ngram":
