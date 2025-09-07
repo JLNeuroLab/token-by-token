@@ -166,28 +166,42 @@ class NeuralTrainer:
         return torch.exp(torch.tensor(avg_loss))
 
     # ------------------- PLOTTING -------------------
-    def plot_perplexity(self, train_ids=None, val_ids=None, filename="perplexity_curve.png", final=False):
-        train_ids = train_ids or self.train_ids
-        val_ids = val_ids or self.valid_ids
+    def plot_loss_curves(self, train_losses, val_losses, root, filename="loss_curves.png", final=False):
+        """
+        Plot and save training and validation loss curves per epoch.
 
-        train_ppl = self.batch_perplexity(train_ids) if train_ids else None
-        val_ppl = self.batch_perplexity(val_ids) if val_ids else None
+        Args:
+            train_losses (list or array): List of training losses per epoch.
+            val_losses (list or array): List of validation losses per epoch.
+            root (str): Project root path.
+            filename (str): Name of the saved figure.
+            final (bool): Whether to save in final folder (saved_models) or experiments.
+        """
+        import matplotlib.pyplot as plt
+        from llm_project.utils.file_manager import get_model_path
+        from llm_project.utils.debugg_utils import Colors
+        import os
+
+        # Make sure losses are lists of epoch averages
+        train_losses = list(train_losses)
+        val_losses = list(val_losses)
 
         fig, ax = plt.subplots(figsize=(8, 6))
-        if train_ppl: ax.plot([train_ppl], label="Train Perplexity", color="blue", marker="o")
-        if val_ppl: ax.plot([val_ppl], label="Validation Perplexity", color="red", marker="o")
-
-        ax.set_xlabel("Step")
-        ax.set_ylabel("Perplexity")
-        ax.set_title("Perplexity over dataset")
-        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.plot(train_losses, marker="o", color="blue", label="Train Loss")
+        ax.plot(val_losses, marker="o", color="red", label="Validation Loss")
+        ax.set_title("Train and Validation Loss per Epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.grid(True, linestyle="--", alpha=0.6)
         ax.legend()
-        model_path = get_model_path(self.root, "models", subdir="neuralfast", final=final)
-        save_path = os.path.join(model_path, filename)
+
+        folder = get_model_path(root, "models", subdir="neuralfast", final=final)
+        os.makedirs(folder, exist_ok=True)
+        save_path = os.path.join(folder, filename)
         fig.savefig(save_path, bbox_inches="tight", dpi=150)
         plt.close(fig)
-        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}")
-        
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Train/Validation loss plot saved to {save_path}")
+            
 
     def plot_val_perplexity_per_epoch(self, val_perplexities, filename="val_perplexity_by_epoch.png", final=False):
         """
@@ -201,7 +215,7 @@ class NeuralTrainer:
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(val_perplexities, marker="o", color="red", label="Validation Perplexity")
+        ax.plot(val_perplexities, marker="o", color="blue", label="Validation Perplexity")
         ax.set_title("Validation Perplexity per Epoch")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Perplexity")
@@ -256,7 +270,7 @@ class NeuralTrainer:
                 print(f"{Colors.WARNING}[WARN]{Colors.ENDC} \n--- No final model found, training from scratch ---")
 
          # ---------------- TRAINING LOOP -------------------
-        train_losses, val_losses = [], []
+        train_losses_per_epoch, val_losses_per_epoch = [], []
         val_perplexities = []
         best_val_loss = float("inf")
         patience_counter = 0
@@ -270,7 +284,6 @@ class NeuralTrainer:
             for _ in range(n_batches):
                 X_batch, y_batch = self.get_batch(self.train_ids)
                 loss = self.train_step(X_batch, y_batch)
-                train_losses.append(loss)
                 epoch_loss += loss
 
                 if step % self.print_every == 0:
@@ -278,6 +291,7 @@ class NeuralTrainer:
                 step += 1
 
             avg_epoch_loss = epoch_loss / n_batches
+            train_losses_per_epoch.append(avg_epoch_loss)
             print(f"Epoch {epoch+1}/{epochs} - Avg Train Loss: {avg_epoch_loss:.4f}")
 
             # ---------------- VALIDATION -------------------
@@ -290,7 +304,7 @@ class NeuralTrainer:
                 with torch.no_grad():
                     _, val_loss_tensor = self.model.forward(X_val, targets=y_val)
                 val_loss = val_loss_tensor.item()
-                val_losses.append(val_loss)
+                val_losses_per_epoch.append(val_loss)
                 val_perplexities.append(np.exp(val_loss))
 
                 print(f"Validation Loss: {val_loss:.4f}, Perplexity: {val_perplexities[-1]:.4f}")
@@ -326,11 +340,12 @@ class NeuralTrainer:
                 break
 
         # ---------------- PLOTTING -------------------
-        self.plot_perplexity(train_ids=self.train_ids, 
-                             val_ids=self.valid_ids,
-                             final=final)
+        self.plot_loss_curves(train_losses=train_losses_per_epoch, 
+                      val_losses=val_losses_per_epoch,
+                      root=self.root,
+                      final=final)
         
         self.plot_val_perplexity_per_epoch(val_perplexities=val_perplexities,
                                            final=final)
 
-        return train_losses, val_losses
+        return train_losses_per_epoch, val_losses_per_epoch

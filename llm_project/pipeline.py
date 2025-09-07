@@ -161,7 +161,7 @@ class LM_Pipeline:
             self.trainer = NeuralTrainer(
                 model=None,
                 batch_size=batch_size,
-                epochs=1,
+                epochs=10,
                 lr = 3e-4,
                 tokens=train_tokens,
                 train_text=None,
@@ -384,8 +384,8 @@ if __name__ == "__main__":
         neural_config = NeuralFastConfig(n=3, 
                                     device=None,
                                     vocab_size=None,
-                                    embd_dim=64,
-                                    block_size=8,
+                                    embd_dim=256,
+                                    block_size=32,
         )
         pipeline_neural = LM_Pipeline("neuralfast", 
                                     neural_config, 
@@ -395,7 +395,7 @@ if __name__ == "__main__":
                                                                                 train_text, 
                                                                                 valid_text, 
                                                                                 max_k=1000, 
-                                                                                force_retrain_tokenizer=False, 
+                                                                                force_retrain_tokenizer=True, 
                                                                                 force_retrain_model=True, 
                                                                                 train_limit=10000, 
                                                                                 valid_limit=1000
