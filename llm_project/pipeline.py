@@ -161,8 +161,8 @@ class LM_Pipeline:
             self.trainer = NeuralTrainer(
                 model=None,
                 batch_size=batch_size,
-                epochs=3,
-                lr = 0.01,
+                epochs=10,
+                lr = 3e-4,
                 tokens=train_tokens,
                 train_text=None,
                 valid_text=None,
@@ -384,7 +384,7 @@ if __name__ == "__main__":
                                     device=None,
                                     vocab_size=None,
                                     embd_dim=256,
-                                    block_size=8,
+                                    block_size=32,
         )
         pipeline_neural = LM_Pipeline("neuralfast", 
                                     neural_config, 
