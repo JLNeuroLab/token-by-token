@@ -56,9 +56,9 @@ class LM_Pipeline:
         tokenizer_filename = f"BPE_merges_k{max_k}.pkl"
         category = "tokenizers"
         final_flag = final if final is not None else self.final
-        save_dir = get_model_path(
+        tokenizer_dir = get_model_path(
             root=self.project_root, category=category, subdir=self.subdir, final=final_flag)
-        save_path = save_dir / tokenizer_filename
+        save_path = tokenizer_dir / tokenizer_filename
 
         # CASE 2: training is not forced and saved tokenizer available
         if not force_retrain and os.path.exists(save_path):
@@ -66,7 +66,7 @@ class LM_Pipeline:
             # Load the tokenizer
             self.tokenizer, tokens = load_tokenizer(root=self.project_root,
                                                     filename=save_path,
-                                                    )
+                                                    final=final_flag)
             if train_limit:
                 tokens = tokens[:train_limit]
                 self.tokenizer.tokens = tokens
@@ -89,7 +89,7 @@ class LM_Pipeline:
         tokens = bpe.tokens
         self.tokenizer = bpe
 
-        plot_path = save_dir / f"vocabulary_growth_k{max_k}.png"
+        plot_path = tokenizer_dir / f"vocabulary_growth_k{max_k}.png"
         bpe.plot_vocabulary_growth(save_path=plot_path)
 
         # Finally, save the tokenizer using save_tokenizer
@@ -161,7 +161,7 @@ class LM_Pipeline:
             self.trainer = NeuralTrainer(
                 model=None,
                 batch_size=batch_size,
-                epochs=10,
+                epochs=1,
                 lr = 3e-4,
                 tokens=train_tokens,
                 train_text=None,
@@ -184,6 +184,7 @@ class LM_Pipeline:
             self.trainer.train(
                 epochs=self.trainer.epochs,
                 force_retrain=force_retrain,
+                final=self.final
             )
             self.model = self.trainer.model
 
@@ -383,12 +384,12 @@ if __name__ == "__main__":
         neural_config = NeuralFastConfig(n=3, 
                                     device=None,
                                     vocab_size=None,
-                                    embd_dim=256,
-                                    block_size=32,
+                                    embd_dim=64,
+                                    block_size=8,
         )
         pipeline_neural = LM_Pipeline("neuralfast", 
                                     neural_config, 
-                                    final=False)
+                                    final=True)
         
         model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
                                                                                 train_text, 
@@ -423,8 +424,8 @@ if __name__ == "__main__":
                                                                                 train_text, 
                                                                                 valid_text, 
                                                                                 max_k=1000, 
-                                                                                force_retrain_tokenizer=False, 
-                                                                                force_retrain_model=False, 
+                                                                                force_retrain_tokenizer=True, 
+                                                                                force_retrain_model=True, 
                                                                                 train_limit=10000, 
                                                                                 valid_limit=1000
         )

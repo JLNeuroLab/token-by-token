@@ -98,7 +98,7 @@ class NeuralTrainer:
         return full_path
 
 
-    def _load_state(self, filename=None, final=False, subdir=None):
+    def _load_state(self, filename=None, subdir=None, final=None):
         """
         Carica lo stato completo del modello, optimizer, vocab e config.
         """
@@ -166,7 +166,7 @@ class NeuralTrainer:
         return torch.exp(torch.tensor(avg_loss))
 
     # ------------------- PLOTTING -------------------
-    def plot_perplexity(self, train_ids=None, val_ids=None, filename="perplexity_curve.png"):
+    def plot_perplexity(self, train_ids=None, val_ids=None, filename="perplexity_curve.png", final=False):
         train_ids = train_ids or self.train_ids
         val_ids = val_ids or self.valid_ids
 
@@ -182,11 +182,41 @@ class NeuralTrainer:
         ax.set_title("Perplexity over dataset")
         ax.grid(True, linestyle="--", alpha=0.5)
         ax.legend()
-        model_path = get_model_path(self.root, self.model_dir)
+        model_path = get_model_path(self.root, "models", subdir="neuralfast", final=final)
         save_path = os.path.join(model_path, filename)
         fig.savefig(save_path, bbox_inches="tight", dpi=150)
         plt.close(fig)
-        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity plot saved to {save_path}")
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}")
+        
+
+    def plot_val_perplexity_per_epoch(self, val_perplexities, filename="val_perplexity_by_epoch.png", final=False):
+        """
+        Plot and save validation perplexity per epoch.
+
+        Args:
+            val_perplexities (list): List of validation perplexities per epoch.
+            filename (str): Name of the saved figure.
+            final (bool): Whether to save in final folder (saved_models) or experiments.
+        """
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(val_perplexities, marker="o", color="red", label="Validation Perplexity")
+        ax.set_title("Validation Perplexity per Epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Perplexity")
+        ax.grid(True, linestyle="--", alpha=0.6)
+        ax.legend()
+
+        # Determine folder based on final flag
+        folder = get_model_path(self.root, "models", subdir="neuralfast", final=final)
+        os.makedirs(folder, exist_ok=True)
+        save_path = os.path.join(folder, filename)
+
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
+        plt.close(fig)
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}")
+
 
     # ------------------- TRAIN LOOP -------------------
     def train(
@@ -267,7 +297,7 @@ class NeuralTrainer:
 
                 # ---------------- SAVE CHECKPOINT ----------------
                 ckpt_name = f"epoch{epoch+1}_val{val_loss:.4f}.pkl"
-                ckpt_path = self._save_state(subdir="checkpoints", filename=ckpt_name)
+                ckpt_path = self._save_state(subdir="checkpoints", filename=ckpt_name, final=final)
                 checkpoint_list.append((val_loss, ckpt_path))
                 checkpoint_list.sort(key=lambda x: x[0])  # sort by validation loss
 
@@ -296,23 +326,11 @@ class NeuralTrainer:
                 break
 
         # ---------------- PLOTTING -------------------
-        self.plot_perplexity(train_ids=self.train_ids, val_ids=self.valid_ids)
-
-        # Plot validation perplexity per epoch
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(val_perplexities, marker="o", label="Validation Perplexity")
-        ax.set_title("Validation Perplexity per Epoch")
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Perplexity")
-        ax.grid(True, linestyle="--", alpha=0.6)
-        ax.legend()
-
-        folder = self.model_dir
-        os.makedirs(folder, exist_ok=True)
-        save_path = os.path.join(folder, "val_perplexity_by_epoch.png")
-        fig.savefig(save_path, bbox_inches="tight", dpi=150)
-        plt.close(fig)
-        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}")
+        self.plot_perplexity(train_ids=self.train_ids, 
+                             val_ids=self.valid_ids,
+                             final=final)
+        
+        self.plot_val_perplexity_per_epoch(val_perplexities=val_perplexities,
+                                           final=final)
 
         return train_losses, val_losses
