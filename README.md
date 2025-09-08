@@ -199,6 +199,11 @@ To evaluate the impact of BPE vocabulary size, we trained the n-gram model with 
 ![Classic n-gram Perplexity](docs/ngram/PPL_vs_k_(n=3).png)
 
 ---
+#### Text generated examples
+**Prompt:** `"Once upon a time"`  
+**Output:**
+
+---
 ### 4.2 Neural n-gram Model
 
 The **neural n-gram model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
@@ -218,13 +223,10 @@ The **neural n-gram model** extends the classic n-gram by learning embeddings fo
 **Plots:**
 
 **Training Loss Curve:**  
-![Neural n-gram Loss](experiments/saved_models/neural_ngram/loss_curve.png)
+![Neural n-gram Loss](docs/neural_ngram/loss_curves.png)
 
 **Perplexity over Epochs / Validation Comparison:**  
-![Neural n-gram Perplexity](experiments/saved_models/neural_ngram/perplexity.png)
-
-**Vocabulary Growth:**  
-![Neural n-gram Vocabulary](experiments/saved_models/neural_ngram/vocabulary_growth.png)
+![Neural n-gram Perplexity](docs/neural_ngram/val_perplexity_by_epoch.png)
 
 ---
 

@@ -253,7 +253,7 @@ class NeuralTrainer:
         if self.model is None:
             if not self.tokens:
                 raise ValueError("Tokens must be set to initialize the model automatically.")
-            print(f"[INFO] Initializing NeuralEmbed model with vocab size {len(self.tokens)}")
+            print(f"[INFO] Initializing NeuralFast model with vocab size {len(self.tokens)}")
             self.model = NeuralLanguageModel(
                 config=self.config
             ).to(self.device)

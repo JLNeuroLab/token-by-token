@@ -241,6 +241,62 @@ class LM_Pipeline:
                            force_retrain=force_retrain_model, 
                            max_k=max_k)
         return self.model, train_tokens, valid_tokens
+    
+    def load_pretrained(self):
+        """Tentativo di caricamento modello pretrained dal final folder."""
+        model_type = self.model_type.lower()
+        
+        # Load tokenizer
+        """Load pretrained tokenizer and model from final folder."""
+        model_type = self.model_type.lower()
+
+        # --- Load tokenizer ---
+        tokenizer_folder = get_model_path(self.project_root, "tokenizers", final=True)
+        tokenizer_file = os.path.join(tokenizer_folder, "best_tokenizer.pkl")
+        if os.path.exists(tokenizer_file):
+            print(f"[INFO] Loading pretrained tokenizer from {tokenizer_file}")
+            self.tokenizer, tokens = load_tokenizer(root=self.project_root,
+                                                    filename=tokenizer_file,
+                                                    final=True)
+            self.token_to_id = {tok: i for i, tok in enumerate(self.tokenizer.tokens)}
+            self.id2token = {i: tok for tok, i in self.token_to_id.items()}
+            self.config.vocab_size = len(self.token_to_id)
+        else:
+            raise FileNotFoundError(f"No pretrained tokenizer found at {tokenizer_file}")
+        
+        # Loading model 
+        if model_type == "ngram":
+            fname = f"ngram_model_n{self.config.n}_k{self.tokenizer.max_k}.pkl"
+            folder = get_model_path(self.project_root, "models", "ngram", final=True)
+            path = os.path.join(folder, fname)
+            if os.path.exists(path):
+                print(f"[INFO] Loading pretrained N-gram from {path}")
+                trainer = NGramTrainer(config=self.config, model=None, tokens=[], k=self.config.n)
+                return trainer._load_state(path, final=True)
+        
+        elif model_type == "neuralfast":
+            fname = "best_model.pkl"
+            folder = get_model_path(self.project_root, "models", "neuralfast", final=True)
+            path = os.path.join(folder, "final", fname)
+            if os.path.exists(path):
+                print(f"[INFO] Loading pretrained NeuralFast from {path}")
+                trainer = NeuralTrainer(
+                    model=None,
+                    batch_size=getattr(self.config, "batch_size", 64),
+                    epochs=getattr(self.config, "epochs", 10),
+                    lr=getattr(self.config, "lr", 3e-4),
+                    tokens=[], train_text=None, valid_text=None,
+                    config=self.config, max_k=getattr(self.tokenizer, "max_k", 1000),
+                    root=self.project_root
+                )
+                self.model = trainer._load_state(filename=fname, final=True)
+                
+                return self.model
+        else:
+            raise NotImplementedError(f"No pretrained loader for {model_type}")
+        
+        return None
+
 
     def generate(self, prompt, max_length=50, from_pretrained=False):
         """
@@ -254,7 +310,17 @@ class LM_Pipeline:
         Returns:
             list: Generated token sequence.
         """
-        # --- Ensure prompt is tokenized ---
+       # --- Load pre-trained model if requested ---
+        if from_pretrained and self.model is None:
+            self.load_pretrained()
+            if self.model is None:
+                raise ValueError("No pretrained model found.")
+
+        # --- Ensure model is present ---
+        if self.model is None:
+            raise ValueError("No model available. Train a model first or set from_pretrained=True.")
+
+        # --- Tokenize prompt ---
         if isinstance(prompt, str):
             if self.tokenizer is None:
                 raise ValueError("Tokenizer is not initialized. Cannot encode string prompt.")
@@ -262,88 +328,47 @@ class LM_Pipeline:
         else:
             prompt_tokens = prompt
 
-        # --- Load pre-trained model if requested ---
-        if from_pretrained:
-            if self.model_type.lower() == "ngram":
-                model_fname = f"ngram_model_n{self.config.n}_k{self.tokenizer.max_k}.pkl"
-                model_folder = get_model_path(self.project_root, 
-                                              category="models", 
-                                              subdir="ngram", 
-                                              final=True
-                                )
-                model_path = os.path.join(model_folder, model_fname)
-                if os.path.exists(model_path):
-                    print(f"Loading pre-trained N-gram model from: {model_path}")
-                    trainer = NGramTrainer(config=self.config, model=None, tokens=prompt_tokens, k=self.config.n)
-                    self.model = trainer._load_state(model_path, final=True)
-                else:
-                    print("No pre-trained N-gram model found in final folder. Using current model.")
-            
-            else:
-                raise NotImplementedError("No other model ready from retrieving pretrained models")
+        # --- Convert prompt tokens to IDs, map unknowns to UNK ---
+        unk_id = self.token_to_id.get("UNK", 0)
+        prompt_ids = [self.token_to_id.get(tok, unk_id) for tok in prompt_tokens]
 
-        # --- Check that model exists ---
-        if self.model is None:
-            if self.trainer is None:
-                raise ValueError("No trainer available. Train a model first or set from_pretrained=True.")
-            
-            model_folder = get_model_path(
-            root=self.trainer.root,
-            category="models",
-            subdir=self.model_type.lower(),  # ngram / neural / gpt
-            final=False,      
-        )
-            print(f"Trying to load existing model from: {model_folder}")
-            
-            model_path = os.path.join(model_folder, "best_model.pkl")
-            print(f"model path is: {model_path}")
-
-            if os.path.exists(model_path):
-                self.model = self.trainer._load_state(filename=model_path, final=True)
-                print(f"[INFO] Loaded saved model automatically from saved_models for generation: {model_path}")
-            else:
-                raise FileNotFoundError(f"No model found in saved_models: {model_path}")
-        
-        # --- Generation for N-gram ---
+        # --- Generation for different model types ---
         if self.model_type.lower() == "ngram":
-            generated_text = self.model.generate_text(prompt_tokens, max_length=max_length)
-            return generated_text
-        
-        elif self.model_type.lower() == "neural":
-            # Convert prompt tokens -> ids
-            prompt_ids = [self.token_to_id[tok] for tok in prompt_tokens if tok in self.token_to_id]
+            return self.model.generate_text(prompt_tokens, max_length=max_length)
 
-            unk_id = self.token_to_id.get("UNK", None)
-            generated_ids, generated_tokens, generated_text = self.model.generate(
-                prompt_ids,
-                max_new_tokens=max_length,
-                block_size=self.config.block_size,
-                id2token=self.id2token,
-                top_k=50,
-                top_p=0.9,
-                unk_id=unk_id
-            )
-            return generated_text
-        
-        elif self.model_type.lower() == "neuralfast":
-            # Convert prompt tokens -> ids
-            prompt_ids = [self.token_to_id[tok] for tok in prompt_tokens if tok in self.token_to_id]
-            device = next(self.model.parameters()).device  # prendi il device corretto dal modello
-            prompt_tensor = torch.tensor([prompt_ids], dtype=torch.long).to(device)
-            unk_id = self.token_to_id.get("UNK", None)
-            generated, generated_tokens, generated_text = self.model.generate(
-                prompt_tensor,
-                max_new_tokens=max_length,
-                block_size=self.config.block_size,
-                top_k=50,
-                top_p=0.9,
-                unk_id=unk_id,
-                id2token=self.id2token
-            )
+        elif self.model_type.lower() in ["neural", "neuralfast"]:
+            # Decide which generate method to use
+            if self.model_type.lower() == "neural":
+                generated_ids, generated_tokens, generated_text = self.model.generate(
+                    start_ids=prompt_ids,
+                    max_new_tokens=max_length,
+                    stochastic=True,
+                    top_k=30,
+                    top_p=0.9,
+                    temperature=1.0,
+                    block_size=getattr(self.config, "block_size", self.model.n),
+                    id2token=self.id2token,
+                    unk_id=unk_id
+                )
+            else:  # neuralfast
+                device = next(self.model.parameters()).device
+                prompt_tensor = torch.tensor([prompt_ids], dtype=torch.long).to(device)
+                generated_ids, generated_tokens, generated_text = self.model.generate(
+                    start_ids=prompt_tensor[0].tolist(),
+                    max_new_tokens=max_length,
+                    stochastic=True,
+                    top_k=30,
+                    top_p=0.9,
+                    temperature=1.0,
+                    block_size=getattr(self.config, "block_size", self.model.n),
+                    id2token=self.id2token,
+                    unk_id=unk_id
+                )
+
             return generated_text
 
-
-        raise NotImplementedError(f"Generation for model type '{self.model_type}' is not implemented.")
+        else:
+            raise NotImplementedError(f"Generation for model type '{self.model_type}' is not implemented.")
     
 # ------------------ TEST -------------------
 
@@ -384,27 +409,27 @@ if __name__ == "__main__":
         neural_config = NeuralFastConfig(n=3, 
                                     device=None,
                                     vocab_size=None,
-                                    embd_dim=256,
+                                    embd_dim=256, 
                                     block_size=32,
         )
         pipeline_neural = LM_Pipeline("neuralfast", 
                                     neural_config, 
-                                    final=False)
+                                    final=True)
         
-        model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
+        """model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
                                                                                 train_text, 
                                                                                 valid_text, 
                                                                                 max_k=1000, 
-                                                                                force_retrain_tokenizer=True, 
-                                                                                force_retrain_model=True, 
-                                                                                train_limit=10000, 
-                                                                                valid_limit=1000
-        )
+                                                                                force_retrain_tokenizer=False, 
+                                                                                force_retrain_model=False, 
+                                                                                train_limit=None, 
+                                                                                valid_limit=None
+        )"""
 
         prompt = "To be, or not to be"
         generated_neural = pipeline_neural.generate(prompt, 
                                                 max_length=100, 
-                                                from_pretrained=False)
+                                                from_pretrained=True)
         print("\nNeural N-gram generated text:")
         print(generated_neural)
 
@@ -419,7 +444,6 @@ if __name__ == "__main__":
         pipeline_neural = LM_Pipeline("neural", 
                                     neural_config, 
                                     final=False)
-        
         model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
                                                                                 train_text, 
                                                                                 valid_text, 
