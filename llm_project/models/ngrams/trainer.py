@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 
 class NGramTrainer:
-    def __init__(self, config, model, tokens, root=None, k=None):
+    def __init__(self, config, model, tokens, root=None, k=None, final=False):
         self.model = model
         self.tokens = tokens
         self.n = config.n
@@ -35,6 +35,7 @@ class NGramTrainer:
         self.config = config
         self.train_text = None
         self.valid_text = None
+        self.final = final
 
     def _state_dict(self):
         if self.model is None:
@@ -154,7 +155,7 @@ class NGramTrainer:
 
         # Save model and get full path
         saved_path = self._save_state(
-            subdir="ngram", filename=model_fname, final=final
+            subdir="ngram", filename=model_fname, final=final_flag
         )
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {saved_path}")
 
