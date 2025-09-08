@@ -104,103 +104,84 @@ class LM_Pipeline:
         return tokens
 
     def setup_trainer(self, train_tokens, batch_size, val_tokens=None, force_retrain=False, max_k=None):
-        """Setup and train the model."""
+        """Setup and train the model with consistent token <-> id mapping."""
+
         model_type = self.model_type.lower()
 
-        unique_tokens = sorted(set(train_tokens))
-        self.token_to_id = {tok: i for i, tok in enumerate(unique_tokens)}
+        # --- USE BPE TOKENS AS DEFINITIVE VOCAB ---
+        self.token_to_id = {tok: i for i, tok in enumerate(self.tokenizer.tokens)}
         self.id2token = {i: tok for tok, i in self.token_to_id.items()}
-
         self.config.vocab_size = len(self.token_to_id)
 
-        # CLASSICAL N-GRAM MODEL
+        # Convert train/val tokens to IDs
+        self.train_ids = [self.token_to_id[tok] for tok in train_tokens if tok in self.token_to_id]
+        self.valid_ids = [self.token_to_id[tok] for tok in val_tokens if val_tokens and tok in self.token_to_id] if val_tokens else None
+
+        # --- MODEL TRAINING / LOADING ---
         if model_type == "ngram":
-            self.trainer = NGramTrainer(
-                config=self.config,
-                model=None,
-                tokens=train_tokens,
-                k=max_k,
-                final=self.final
-            )
+            self.trainer = NGramTrainer(config=self.config,
+                                        model=None,
+                                        tokens=train_tokens,
+                                        k=max_k,
+                                        final=self.final)
             self.trainer.train(final=self.final)
-            self.trainer.final = self.final
             self.model = self.trainer.model
 
         elif model_type == "neural":
-            self.trainer = NeuralEmbedTrainer(
-                model=None,
-                batch_size=batch_size,
-                epochs=10,
-                lr = 0.01,
-                tokens=train_tokens,
-                train_text=None,
-                valid_text=None,
-                config=self.config,
-                max_k=max_k,
-                root=self.project_root,
-                print_every=50,
-            )
-
-            # Converte tokens → ids
-            self.trainer.train_ids = [self.token_to_id[tok] for tok in train_tokens if tok in self.token_to_id]
-            if val_tokens:
-                self.trainer.val_ids = [self.token_to_id[tok] for tok in val_tokens if tok in self.token_to_id]
-
+            self.trainer = NeuralEmbedTrainer(model=None,
+                                            batch_size=batch_size,
+                                            epochs=10,
+                                            lr=0.01,
+                                            tokens=train_tokens,
+                                            train_text=None,
+                                            valid_text=None,
+                                            config=self.config,
+                                            max_k=max_k,
+                                            root=self.project_root,
+                                            print_every=50)
+            self.trainer.train_ids = self.train_ids
+            self.trainer.valid_ids = self.valid_ids
             self.trainer.id2token = self.id2token
             self.trainer.token2id = self.token_to_id
 
-            self.trainer.train(
-                epochs=self.trainer.epochs,
-                lr=self.trainer.lr,
-                patience=getattr(self.config, "patience", 3),
-                force_retrain=force_retrain,
-
-            )
+            self.trainer.train(epochs=self.trainer.epochs,
+                            lr=self.trainer.lr,
+                            patience=getattr(self.config, "patience", 3),
+                            force_retrain=force_retrain)
             self.model = self.trainer.model
 
         elif model_type == "neuralfast":
-            self.trainer = NeuralTrainer(
-                model=None,
-                batch_size=batch_size,
-                epochs=10,
-                lr = 3e-4,
-                tokens=train_tokens,
-                train_text=None,
-                valid_text=None,
-                config=self.config,
-                max_k=max_k,
-                root=self.project_root,
-                print_every=50,
-                patience=3
-            )
-
-            # Converte tokens → ids
-            self.trainer.train_ids = [self.token_to_id[tok] for tok in train_tokens if tok in self.token_to_id]
-            if val_tokens:
-                self.trainer.valid_ids = [self.token_to_id[tok] for tok in val_tokens if tok in self.token_to_id]
-
+            self.trainer = NeuralTrainer(model=None,
+                                        batch_size=batch_size,
+                                        epochs=10,
+                                        lr=3e-4,
+                                        tokens=train_tokens,
+                                        train_text=None,
+                                        valid_text=None,
+                                        config=self.config,
+                                        max_k=max_k,
+                                        root=self.project_root,
+                                        print_every=50,
+                                        patience=3)
+            self.trainer.train_ids = self.train_ids
+            self.trainer.valid_ids = self.valid_ids
             self.trainer.id2token = self.id2token
             self.trainer.token2id = self.token_to_id
 
-            self.trainer.train(
-                epochs=self.trainer.epochs,
-                force_retrain=force_retrain,
-                final=self.final
-            )
+            self.trainer.train(epochs=self.trainer.epochs,
+                            force_retrain=force_retrain,
+                            final=self.final)
             self.model = self.trainer.model
 
         elif model_type == "gpt":
-            ngram_trainer = GptTrainer(
-                config=self.config, model=None, tokens=train_tokens, k=max_k
-            )
-            self.model = ngram_trainer.train(
-                force_retrain=force_retrain,
-                tune_lambdas=True,
-                train_limit=None,
-                valid_limit=None,
-            )
+            gpt_trainer = GptTrainer(config=self.config, model=None, tokens=train_tokens, k=max_k)
+            self.model = gpt_trainer.train(force_retrain=force_retrain,
+                                        tune_lambdas=True,
+                                        train_limit=None,
+                                        valid_limit=None)
         else:
-            raise NotImplementedError(f"Model type '{self.model_type}' not implemented")
+            raise NotImplementedError(f"Model type '{self.model_type}' not implemented.")
+
 
     def train(self,
             train_text=None,
@@ -423,15 +404,15 @@ if __name__ == "__main__":
                                     neural_config, 
                                     final=True)
         
-        """model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
+        model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
                                                                                 train_text, 
                                                                                 valid_text, 
                                                                                 max_k=2000, 
                                                                                 force_retrain_tokenizer=False, 
                                                                                 force_retrain_model=False, 
-                                                                                train_limit=10000, 
-                                                                                valid_limit=1000
-        )"""
+                                                                                train_limit=None, 
+                                                                                valid_limit= None
+        )
 
         prompt = "To be, or not to be"
         generated_neural = pipeline_neural.generate(prompt, 
