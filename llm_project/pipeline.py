@@ -129,7 +129,7 @@ class LM_Pipeline:
             self.trainer = NeuralEmbedTrainer(
                 model=None,
                 batch_size=batch_size,
-                epochs=3,
+                epochs=10,
                 lr = 0.01,
                 tokens=train_tokens,
                 train_text=None,
@@ -389,7 +389,7 @@ if __name__ == "__main__":
         )
         pipeline_neural = LM_Pipeline("neuralfast", 
                                     neural_config, 
-                                    final=True)
+                                    final=False)
         
         model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
                                                                                 train_text, 
