@@ -205,7 +205,7 @@ class NGramTrainer:
             ax.text(bar.get_x() + bar.get_width() / 2.0, yval, f"{yval:.2f}", va="bottom", ha="center")
 
         # Respect final folder logic
-        save_folder = get_model_path(root=self.root, category="plots", subdir=folder, final=final)
+        save_folder = get_model_path(root=self.root, category="models", subdir="ngram", final=final)
         os.makedirs(save_folder, exist_ok=True)
         save_path = os.path.join(save_folder, filename)
 
@@ -229,7 +229,7 @@ class NGramTrainer:
             raise ValueError("Lambdas must sum to 1.")
         self.model.lambdas[label] = lambdas
 
-    def tune_lambdas(self, lambda_candidates=None, valid_limit=None):
+    def tune_lambdas(self, lambda_candidates=None, valid_limit=None, plot=True):
         """Finds optimal lambda weights by minimizing perplexity."""
         if lambda_candidates is None:
             lambda_candidates = {
@@ -251,6 +251,10 @@ class NGramTrainer:
                 lowest_perplexity, best_lambdas = perplexity, current_lambdas
 
         self.model.lambdas = {"best": best_lambdas}
+        # Plot automatically if requested
+        if plot and results:
+            self.plot_lambda_perplexities(results, folder="ngram", final=getattr(self, "final", False))
+
         return best_lambdas, lowest_perplexity, results
 
     def plot_perplexity_comparison(self, results: dict, output_folder: str):

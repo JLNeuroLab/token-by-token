@@ -135,7 +135,7 @@ class LM_Pipeline:
                                         tokens=train_tokens,
                                         k=max_k,
                                         final=self.final)
-            self.trainer.train(final=self.final)
+            self.trainer.train(final=self.final, force_retrain=force_retrain)
             self.model = self.trainer.model
 
         elif model_type == "neural":
@@ -372,7 +372,7 @@ if __name__ == "__main__":
     train_text = load_shakespeare(version="train")
     valid_text = load_shakespeare(version="validation")
 
-    model = "neuralfast" # ngram, gpt
+    model = "ngram" # "ngram", "neuralfast", "gpt"
 
     if model == "ngram":
     # --- Ngram model ---
@@ -387,7 +387,7 @@ if __name__ == "__main__":
         ngram_pipeline.train(train_text=train_text,
                              valid_text=valid_text,
                              max_k=2000,
-                             force_retrain_model=False,
+                             force_retrain_model=True,
                              force_retrain_tokenizer=False,
                              train_limit=10000,
                              valid_limit=1000,
