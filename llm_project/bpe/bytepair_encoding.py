@@ -24,7 +24,7 @@ def print_resource_usage(self, step: int):
 
     print(
         f"""
-            [DEBUG]{f" BPE Merge step: {step:>10}m":>25}||{f"{'Step duration:':<8}{step_duration:>8.2f}s":>24}||
+            [STEP] {f" BPE Merge step: {step:>10}m":>25}||{f"{'Step duration:':<8}{step_duration:>8.2f}s":>24}||
             {f"        Ram used: {ram_used:>15.2f}MB":>32}||{f"{'CPU:':>1} {cpu_p:>17.2f}%":>24}||"""
     )
     current_os = platform.system().lower()
@@ -101,7 +101,7 @@ class BPE:
 
     def plot_merge_times(self):
         if not self.merge_time_dict:
-            print("No merge timings recorded.")
+            print(f"{Colors.FAIL}[ERROR]{Colors.ENDC} No merge timings recorded.")
             return
 
         steps = list(self.merge_time_dict.keys())
@@ -153,7 +153,7 @@ class BPE:
                 self.text = f.read()
         elif self.text is None:
             raise ValueError(
-                "You must specify a datapath or provide a raw text when importing this module"
+                f"{Colors.FAIL}[ERROR]{Colors.ENDC} You must specify a datapath or provide a raw text when importing this module"
             )
         norm_text = normalize_text(self.text)
         return norm_text
@@ -255,7 +255,7 @@ class BPE:
         full_vocab = {**initial_vocab, **merged_tokens_vocab}
         self.vocab = full_vocab
 
-        print(f"BPE training {Colors.OKGREEN}[DONE]{Colors.ENDC}\n")
+        print(f"{Colors.OKGREEN}[DONE]{Colors.ENDC} BPE training finished.\n")
         self.build_token_mappings()
 
     def plot_vocabulary_growth(self, save_path):
@@ -268,7 +268,9 @@ class BPE:
 
         """
         if not self.vocab_size_history:
-            print("No vocabulary size data available to plot.")
+            print(
+                f"{Colors.FAIL}[ERROR]{Colors.ENDC} No vocabulary size data available to plot."
+            )
             return
 
         ks_for_plt = np.linspace(10, self.max_k, 100, dtype=int)
@@ -301,7 +303,9 @@ class BPE:
 
         if save_path:
             fig.savefig(save_path, bbox_inches="tight", dpi=150)
-            print(f"Vocabulary growth plot saved to: {save_path}")
+            print(
+                f"{Colors.OKGREEN}[OK]{Colors.ENDC} Vocabulary growth plot saved to: {save_path}"
+            )
         return fig
         # save_item(fig, "plots", "vocabulary_growth")
 
@@ -326,7 +330,9 @@ class BPE:
         """
         if text is None:
             if self.test_text is None:
-                raise ValueError("No text provided and self.test_text is None.")
+                raise ValueError(
+                    f"{Colors.FAIL}[ERROR]{Colors.ENDC} No text provided and self.test_text is None."
+                )
             text = self.test_text
 
         tokens = list(text)
@@ -356,7 +362,9 @@ class BPE:
     def compute_coverage(self, text=None):
         if text is None:
             if self.test_text is None:
-                raise ValueError("No text provided and self.test_text is None.")
+                raise ValueError(
+                    f"{Colors.FAIL}[ERROR]{Colors.ENDC} No text provided and self.test_text is None."
+                )
             text = self.test_text
 
         if isinstance(text, list):
@@ -413,7 +421,7 @@ if __name__ == "__main__":
     bpe.text = bpe.train_text
     print("\nStarting Byte-Pair Encoding on train text...\n")
     bpe.BPE_encoder()
-    print("\nLoop completed, train text tokenized\n")
+    print(f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Loop completed, train text tokenized\n")
 
     # To visualize slow downs
     bpe.plot_merge_times()
@@ -424,12 +432,14 @@ if __name__ == "__main__":
     # Tokenize test text usando le merges imparate dal train
     print("\nTokenizing test text...\n")
     test_tokens = bpe.BPE_segmenter(bpe.test_text)
-    print("\nTokenization of test text completed\n")
+    print(f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Tokenization of test text completed\n")
 
     # Compute coverage del test set
     coverage = bpe.compute_coverage(test_tokens)
     print("-" * 80)
-    print(f"[RESULTS]:\nCoverage score for k = {max_k}: {coverage:.4f}\n")
+    print(
+        f"\n{Colors.OKCYAN}[RESULTS]{Colors.ENDC} Coverage score for k = {max_k}: {coverage:.4f}\n"
+    )
 
     # Save results
     save_item(" ".join(test_tokens), test_results_path, "test_tokenized.txt")

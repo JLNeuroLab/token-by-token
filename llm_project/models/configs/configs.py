@@ -5,7 +5,7 @@ class BaseConfig:
         self.device = device
 
 
-class GPTConfig(BaseConfig):
+class GptConfig(BaseConfig):
     """
     Base configuration class for GPT models.
 
