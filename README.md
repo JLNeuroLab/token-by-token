@@ -201,7 +201,7 @@ To evaluate the impact of BPE vocabulary size, we trained the n-gram model with 
 ---
 #### Text generated examples
 **Prompt:** `"Once upon a time"`  
-**Output:**
+**Output:**  `"To be, or not to beloving than beloved. CHARMIAN I had rather heat my liver with drinking. ALEXAS Nay, hear him. CHARMIAN Good now, some excellent fortune! Let me be married to three kings in a foren"` 
 
 ---
 ### 4.2 Neural n-gram Model
@@ -227,6 +227,11 @@ The **neural n-gram model** extends the classic n-gram by learning embeddings fo
 
 **Perplexity over Epochs / Validation Comparison:**  
 ![Neural n-gram Perplexity](docs/neural_ngram/val_perplexity_by_epoch.png)
+
+---
+#### Text generated examples
+**Prompt:** `"Once upon a time"`  
+**Output:**  `"To be, or not to beloving than beloved. CHARMIAN I had rather heat my liver with drinking. ALEXAS Nay, hear him. CHARMIAN Good now, some excellent fortune! Let me be married to three kings in a foren"` 
 
 ---
 

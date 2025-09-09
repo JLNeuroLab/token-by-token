@@ -372,7 +372,7 @@ if __name__ == "__main__":
     train_text = load_shakespeare(version="train")
     valid_text = load_shakespeare(version="validation")
 
-    model = "ngram" # "ngram", "neuralfast", "gpt"
+    model = "neuralfast" # "ngram", "neuralfast", "gpt"
 
     if model == "ngram":
     # --- Ngram model ---
@@ -382,15 +382,15 @@ if __name__ == "__main__":
     
         ngram_pipeline = LM_Pipeline(model_type=model,
                                     config=ngram_config,
-                                    final=False
+                                    final=True
         )
         ngram_pipeline.train(train_text=train_text,
                              valid_text=valid_text,
-                             max_k=2000,
-                             force_retrain_model=True,
-                             force_retrain_tokenizer=False,
-                             train_limit=10000,
-                             valid_limit=1000,
+                             max_k=200,
+                             force_retrain_model=False,
+                             force_retrain_tokenizer=True,
+                             train_limit=None,
+                             valid_limit=None,
                         )
         
         prompt = "To be, or not to be"
@@ -408,16 +408,16 @@ if __name__ == "__main__":
         )
         pipeline_neural = LM_Pipeline("neuralfast",
                                     neural_config, 
-                                    final=False)
+                                    final=True)
         
         model_neural, train_tokens_neural, valid_tokens_neural = pipeline_neural.train(
                                                                                 train_text, 
                                                                                 valid_text, 
-                                                                                max_k=2000, 
-                                                                                force_retrain_tokenizer=False, 
+                                                                                max_k=1000, 
+                                                                                force_retrain_tokenizer=True, 
                                                                                 force_retrain_model=False, 
-                                                                                train_limit=10000, 
-                                                                                valid_limit= 1000
+                                                                                train_limit=None, 
+                                                                                valid_limit= None
         )
 
         prompt = "To be, or not to be"
