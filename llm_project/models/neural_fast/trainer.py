@@ -254,10 +254,11 @@ class NeuralTrainer:
             if not self.tokens:
                 raise ValueError("Tokens must be set to initialize the model automatically.")
             print(f"[INFO] Initializing NeuralFast model with vocab size {len(self.tokens)}")
+            self.config.vocab_size = len(self.tokens)
             self.model = NeuralLanguageModel(
                 config=self.config
             ).to(self.device)
-
+    
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
         if not force_retrain:

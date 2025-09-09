@@ -48,6 +48,9 @@ class LM_Pipeline:
                 if train_limit
                 else self.tokenizer.tokens
             )
+            if "UNK" not in tokens:
+                tokens.insert(0, "UNK")
+            self.tokenizer.tokens = tokens
             print(f"DEBUG: tokenizer.tokens length = {len(tokens)}")
             # Returns tokens, will be useful for setting up the trainer
             return tokens
@@ -87,6 +90,9 @@ class LM_Pipeline:
         bpe = BPE(max_k=max_k, text=train_text)
         bpe.BPE_encoder()
         tokens = bpe.tokens
+        if "UNK" not in tokens:
+            tokens.insert(0, "UNK")
+        bpe.tokens = tokens
         self.tokenizer = bpe
 
         plot_path = tokenizer_dir / f"vocabulary_growth_k{max_k}.png"
@@ -109,13 +115,18 @@ class LM_Pipeline:
         model_type = self.model_type.lower()
 
         # --- USE BPE TOKENS AS DEFINITIVE VOCAB ---
+        if "UNK" not in self.tokenizer.tokens:
+            self.tokenizer.tokens.insert(0, "UNK")
+
         self.token_to_id = {tok: i for i, tok in enumerate(self.tokenizer.tokens)}
         self.id2token = {i: tok for tok, i in self.token_to_id.items()}
         self.config.vocab_size = len(self.token_to_id)
 
-        # Convert train/val tokens to IDs
-        self.train_ids = [self.token_to_id[tok] for tok in train_tokens if tok in self.token_to_id]
-        self.valid_ids = [self.token_to_id[tok] for tok in val_tokens if val_tokens and tok in self.token_to_id] if val_tokens else None
+        unk_id = self.token_to_id["UNK"]
+
+        # Convert train/val tokens to IDs, map unknowns to UNK
+        self.train_ids = [self.token_to_id.get(tok, unk_id) for tok in train_tokens]
+        self.valid_ids = [self.token_to_id.get(tok, unk_id) for tok in val_tokens] if val_tokens else None
 
         # --- MODEL TRAINING / LOADING ---
         if model_type == "ngram":
@@ -140,7 +151,7 @@ class LM_Pipeline:
                                             root=self.project_root,
                                             print_every=50)
             self.trainer.train_ids = self.train_ids
-            self.trainer.valid_ids = self.valid_ids
+            self.trainer.val_ids = self.valid_ids
             self.trainer.id2token = self.id2token
             self.trainer.token2id = self.token_to_id
 
