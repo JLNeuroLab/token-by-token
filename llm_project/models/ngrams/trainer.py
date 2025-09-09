@@ -181,10 +181,19 @@ class NGramTrainer:
         perplexity = np.exp(-avg_log_prob)
         return perplexity
 
-    def plot_lambda_perplexities(
-        self, results, folder="ngram", filename="lambda_perplexity.png"
-    ):
-        """Plots a bar chart of perplexity results for different lambda sets."""
+    def plot_lambda_perplexities(self, results, folder="ngram", filename="lambda_perplexity.png", final=False):
+        """
+        Plots a bar chart of perplexity results for different lambda sets.
+        Respects final/pretrained folder logic.
+        """
+        import matplotlib.pyplot as plt
+        from llm_project.utils.file_manager import get_model_path
+        import os
+
+        if not results:
+            print(f"{Colors.WARNING}[WARN]{Colors.ENDC} No results to plot.")
+            return
+
         labels, perplexities = zip(*results)
         fig, ax = plt.subplots(figsize=(10, 6))
         bars = ax.bar(labels, perplexities, color="skyblue", edgecolor="black")
@@ -193,22 +202,16 @@ class NGramTrainer:
         plt.setp(ax.get_xticklabels(), rotation=15, ha="right")
         for bar in bars:
             yval = bar.get_height()
-            ax.text(
-                bar.get_x() + bar.get_width() / 2.0,
-                yval,
-                f"{yval:.2f}",
-                va="bottom",
-                ha="center",
-            )
-        folder = os.path.abspath(folder)
-        os.makedirs(folder, exist_ok=True)
-        save_path = os.path.join(folder, filename)
+            ax.text(bar.get_x() + bar.get_width() / 2.0, yval, f"{yval:.2f}", va="bottom", ha="center")
+
+        # Respect final folder logic
+        save_folder = get_model_path(root=self.root, category="plots", subdir=folder, final=final)
+        os.makedirs(save_folder, exist_ok=True)
+        save_path = os.path.join(save_folder, filename)
 
         try:
             fig.savefig(save_path, bbox_inches="tight", dpi=150)
-            print(
-                f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity comparison plot saved to {save_path}"
-            )
+            print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity comparison plot saved to {save_path}")
         except Exception as e:
             print(f"{Colors.FAIL}[FAIL]{Colors.ENDC} Failed to save plot: {e}")
 
