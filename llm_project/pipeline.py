@@ -327,7 +327,10 @@ class LM_Pipeline:
         prompt_ids = [self.token_to_id.get(tok, unk_id) for tok in prompt_tokens]
         # --- Generation for different model types ---
         if self.model_type.lower() == "ngram":
-            return self.model.generate_text(prompt_tokens, max_length=max_length)
+            return self.model.generate_text(prompt_tokens, 
+                                            max_length=max_length,
+                                            top_k=20
+                                            )
 
         elif self.model_type.lower() in ["neural", "neuralfast"]:
             # Decide which generate method to use
@@ -372,7 +375,7 @@ if __name__ == "__main__":
     train_text = load_shakespeare(version="train")
     valid_text = load_shakespeare(version="validation")
 
-    model = "neuralfast" # "ngram", "neuralfast", "gpt"
+    model = "ngram" # "ngram", "neuralfast", "gpt"
 
     if model == "ngram":
     # --- Ngram model ---
@@ -388,13 +391,13 @@ if __name__ == "__main__":
                              valid_text=valid_text,
                              max_k=200,
                              force_retrain_model=False,
-                             force_retrain_tokenizer=True,
+                             force_retrain_tokenizer=False,
                              train_limit=None,
                              valid_limit=None,
                         )
         
         prompt = "To be, or not to be"
-        generated_ngram = ngram_pipeline.generate(prompt, max_length=50, from_pretrained=True)
+        generated_ngram = ngram_pipeline.generate(prompt, max_length=100, from_pretrained=True)
         print("\n N-gram generated text:")
         print(generated_ngram)
 
