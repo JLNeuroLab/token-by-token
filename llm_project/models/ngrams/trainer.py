@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 
 class NGramTrainer:
-    def __init__(self, config, model, tokens, root=None, k=None):
+    def __init__(self, config, model, tokens, root=None, k=None, final=False):
         self.model = model
         self.tokens = tokens
         self.n = config.n
@@ -35,6 +35,7 @@ class NGramTrainer:
         self.config = config
         self.train_text = None
         self.valid_text = None
+        self.final = final
 
     def _state_dict(self):
         if self.model is None:
@@ -154,7 +155,7 @@ class NGramTrainer:
 
         # Save model and get full path
         saved_path = self._save_state(
-            subdir="ngram", filename=model_fname, final=final
+            subdir="ngram", filename=model_fname, final=final_flag
         )
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {saved_path}")
 
@@ -180,10 +181,19 @@ class NGramTrainer:
         perplexity = np.exp(-avg_log_prob)
         return perplexity
 
-    def plot_lambda_perplexities(
-        self, results, folder="ngram", filename="lambda_perplexity.png"
-    ):
-        """Plots a bar chart of perplexity results for different lambda sets."""
+    def plot_lambda_perplexities(self, results, folder="ngram", filename="lambda_perplexity.png", final=False):
+        """
+        Plots a bar chart of perplexity results for different lambda sets.
+        Respects final/pretrained folder logic.
+        """
+        import matplotlib.pyplot as plt
+        from llm_project.utils.file_manager import get_model_path
+        import os
+
+        if not results:
+            print(f"{Colors.WARNING}[WARN]{Colors.ENDC} No results to plot.")
+            return
+
         labels, perplexities = zip(*results)
         fig, ax = plt.subplots(figsize=(10, 6))
         bars = ax.bar(labels, perplexities, color="skyblue", edgecolor="black")
@@ -192,22 +202,16 @@ class NGramTrainer:
         plt.setp(ax.get_xticklabels(), rotation=15, ha="right")
         for bar in bars:
             yval = bar.get_height()
-            ax.text(
-                bar.get_x() + bar.get_width() / 2.0,
-                yval,
-                f"{yval:.2f}",
-                va="bottom",
-                ha="center",
-            )
-        folder = os.path.abspath(folder)
-        os.makedirs(folder, exist_ok=True)
-        save_path = os.path.join(folder, filename)
+            ax.text(bar.get_x() + bar.get_width() / 2.0, yval, f"{yval:.2f}", va="bottom", ha="center")
+
+        # Respect final folder logic
+        save_folder = get_model_path(root=self.root, category="models", subdir="ngram", final=final)
+        os.makedirs(save_folder, exist_ok=True)
+        save_path = os.path.join(save_folder, filename)
 
         try:
             fig.savefig(save_path, bbox_inches="tight", dpi=150)
-            print(
-                f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity comparison plot saved to {save_path}"
-            )
+            print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity comparison plot saved to {save_path}")
         except Exception as e:
             print(f"{Colors.FAIL}[FAIL]{Colors.ENDC} Failed to save plot: {e}")
 
@@ -225,7 +229,7 @@ class NGramTrainer:
             raise ValueError("Lambdas must sum to 1.")
         self.model.lambdas[label] = lambdas
 
-    def tune_lambdas(self, lambda_candidates=None, valid_limit=None):
+    def tune_lambdas(self, lambda_candidates=None, valid_limit=None, plot=True):
         """Finds optimal lambda weights by minimizing perplexity."""
         if lambda_candidates is None:
             lambda_candidates = {
@@ -247,6 +251,10 @@ class NGramTrainer:
                 lowest_perplexity, best_lambdas = perplexity, current_lambdas
 
         self.model.lambdas = {"best": best_lambdas}
+        # Plot automatically if requested
+        if plot and results:
+            self.plot_lambda_perplexities(results, folder="ngram", final=getattr(self, "final", False))
+
         return best_lambdas, lowest_perplexity, results
 
     def plot_perplexity_comparison(self, results: dict, output_folder: str):

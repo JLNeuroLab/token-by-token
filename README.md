@@ -199,6 +199,11 @@ To evaluate the impact of BPE vocabulary size, we trained the n-gram model with 
 ![Classic n-gram Perplexity](docs/ngram/PPL_vs_k_(n=3).png)
 
 ---
+#### Text generated examples
+**Prompt:** `"Once upon a time"`  
+**Output:**  `"To be, or not to beloving than beloved. CHARMIAN I had rather heat my liver with drinking. ALEXAS Nay, hear him. CHARMIAN Good now, some excellent fortune! Let me be married to three kings in a foren"` 
+
+---
 ### 4.2 Neural n-gram Model
 
 The **neural n-gram model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
@@ -218,13 +223,15 @@ The **neural n-gram model** extends the classic n-gram by learning embeddings fo
 **Plots:**
 
 **Training Loss Curve:**  
-![Neural n-gram Loss](experiments/saved_models/neural_ngram/loss_curve.png)
+![Neural n-gram Loss](docs/neural_ngram/loss_curves.png)
 
 **Perplexity over Epochs / Validation Comparison:**  
-![Neural n-gram Perplexity](experiments/saved_models/neural_ngram/perplexity.png)
+![Neural n-gram Perplexity](docs/neural_ngram/val_perplexity_by_epoch.png)
 
-**Vocabulary Growth:**  
-![Neural n-gram Vocabulary](experiments/saved_models/neural_ngram/vocabulary_growth.png)
+---
+#### Text generated examples
+**Prompt:** `"Once upon a time"`  
+**Output:**  `"To be, or not to beloving than beloved. CHARMIAN I had rather heat my liver with drinking. ALEXAS Nay, hear him. CHARMIAN Good now, some excellent fortune! Let me be married to three kings in a foren"` 
 
 ---
 

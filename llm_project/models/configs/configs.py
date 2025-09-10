@@ -1,3 +1,6 @@
+import torch
+
+
 class BaseConfig:
     def __init__(self, device, **kwargs):
         for key, value in kwargs.items():
@@ -53,7 +56,7 @@ class GptConfig(BaseConfig):
         device: str | None = None,
         n_head: int | None = None,
         n_layer: int | None = None,
-    ) -> "GPTConfig":
+    ) -> "GptConfig":
         """
         Supplies defaults. Use this in trainers instead of calling __init__ directly.
         """
@@ -149,6 +152,7 @@ class NeuralFastConfig(BaseConfig):
         self.vocab_size = vocab_size
         self.embd_dim = embd_dim
         self.block_size = block_size
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def display(self):
         print("Neural n-gram configuration")
