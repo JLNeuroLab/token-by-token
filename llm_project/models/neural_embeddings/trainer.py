@@ -1,9 +1,13 @@
 import os
-import glob
 import numpy as np
 import matplotlib.pyplot as plt
-from llm_project.utils.dataloader import load_shakespeare
-from llm_project.utils.file_manager import save_model, load_model, get_model_path, get_project_root
+
+from llm_project.utils.file_manager import (
+    save_model,
+    load_model,
+    get_model_path,
+    get_project_root,
+)
 from llm_project.models.neural_embeddings.model import NeuralEmbed
 from llm_project.utils.debugg_utils import Colors
 
@@ -23,8 +27,7 @@ class NeuralEmbedTrainer:
         root=None,
         print_every=100,
     ):
-        
-    # trainer parameters
+        # trainer parameters
         self.model = model
         self.n = config.n
         self.train_text = train_text
@@ -32,7 +35,9 @@ class NeuralEmbedTrainer:
         self.print_every = print_every
 
         self.root = root or get_project_root()
-        self.model_dir = os.path.join(self.root, "experiments", "models", "neural_ngrams")
+        self.model_dir = os.path.join(
+            self.root, "experiments", "models", "neural_ngrams"
+        )
         os.makedirs(self.model_dir, exist_ok=True)
 
         self.batch_size = batch_size
@@ -40,67 +45,83 @@ class NeuralEmbedTrainer:
         self.embedding_dim = config.embd_dim
         self.max_k = max_k
 
+        # Provided but unused for training (we train on ids). Kept for compatibility.
         self.tokens = tokens
+
+        # Pipeline must assign these before calling train()
         self.train_ids = None
         self.val_ids = None
 
         self.epochs = epochs
         self.lr = lr
 
+        # mapping provided by pipeline
+        self.token2id = getattr(self, "token2id", None)
+        self.id2token = getattr(self, "id2token", None)
+        self.unk_id = getattr(self, "unk_id", None)
+
+        # whether to load/save from final folder (pipeline may set this attribute too)
+        self.final = getattr(self, "final", False)
+
+    # ---- vocab wiring from pipeline ----
+    def set_vocab(self, token2id, id2token, unk_id):
+        """Called from pipeline before training/generation."""
+        self.token2id = token2id
+        self.id2token = id2token
+        self.unk_id = 0 if unk_id is None else int(unk_id)
+
+    # ---- batching over id sequences ----
     def get_batch(self, data_ids):
         """
-        Creates a batch of input sequences and corresponding target sequences
-        from a list of token IDs.
-
-        Args:
-            data_ids (list of int): sequence of integer token IDs.
-            block_size (int): length of each input sequence (context window).
-            batch_size (int): number of sequences in the batch.
-
-        Returns:
-            X (np.ndarray): array of shape (batch_size, block_size) containing input sequences.
-            y (np.ndarray): array of shape (batch_size, block_size) containing target sequences
-                            (inputs shifted by one token).
+        Create a batch of (X, y) from a list of token IDs.
+        X: (batch_size, block_size)
+        y: (batch_size, block_size) = X shifted by one
         """
-        X, y = [], []
-        for _ in range(self.batch_size):
-            start_idx = np.random.randint(0, len(data_ids) - self.block_size - 1)
-            x_block = data_ids[start_idx : start_idx + self.block_size]
-            y_block = data_ids[start_idx + 1 : start_idx + self.block_size + 1]
+        data_ids = np.asarray(data_ids, dtype=np.int64)
 
-            X.append(x_block)
-            y.append(y_block)
+        if data_ids is None or len(data_ids) <= self.block_size + 1:
+            raise ValueError(
+                f"Not enough data for block_size={self.block_size} (len={0 if data_ids is None else len(data_ids)})"
+            )
+
+        # Preallocate as int64
+        X = np.empty((self.batch_size, self.block_size), dtype=np.int64)
+        y = np.empty((self.batch_size, self.block_size), dtype=np.int64)
+
+        max_start = data_ids.size - self.block_size - 1
+        for b in range(self.batch_size):
+            start_idx = np.random.randint(0, max_start + 1)
+            X[b, :] = data_ids[start_idx : start_idx + self.block_size]
+            y[b, :] = data_ids[start_idx + 1 : start_idx + 1 + self.block_size]
 
         return np.array(X), np.array(y)
-    
+
+    # ---- serialization helpers ----
     def _state_dict(self):
         if self.model is None:
             raise ValueError(f"{Colors.FAIL}[FAIL]{Colors.ENDC} Model not initialized")
-        state = {
+        return {
             "n": self.model.n,
             "vocab_size": self.model.vocab_size,
             "embd_dim": self.model.embd_dim,
             "params": {
                 "embeddings": self.model.embeddings,
                 "W": self.model.W,
-                "b": self.model.b
+                "b": self.model.b,
             },
+            # persist vocab so generation works out of process
             "id2token": getattr(self, "id2token", None),
-            "token2id": getattr(self, "token2id", None)
+            "token2id": getattr(self, "token2id", None),
+            "unk_id": getattr(self, "unk_id", 0),
         }
-        return state
-    
+
     def _save_state(self, subdir=None, filename=None, final=None):
         final_flag = final if final is not None else getattr(self, "final", False)
-        
-        # scegli la sottocartella in base a final
         model_subdir = "neural_ngrams"
-        target_subdir = os.path.join(model_subdir, "checkpoints") if not final_flag else os.path.join(model_subdir, "final")
-
-
+        target_subdir = os.path.join(
+            model_subdir, "final" if final_flag else "checkpoints"
+        )
         state = self._state_dict()
-
-        # salva il file
         full_path = save_model(
             state,
             root=self.root,
@@ -110,13 +131,13 @@ class NeuralEmbedTrainer:
             final=final_flag,
         )
         return full_path
-    
+
     def _load_state(self, filename=None, final=False, subdir=None):
         final_flag = final if final is not None else getattr(self, "final", False)
-        
         filename = filename or "best_model.pkl"
-        subdir = subdir or os.path.join("neural_ngrams", "final" if final else "checkpoints")
-
+        subdir = subdir or os.path.join(
+            "neural_ngrams", "final" if final_flag else "checkpoints"
+        )
 
         model_data = load_model(
             root=self.root, filename=filename, final=final_flag, subdir=subdir
@@ -132,66 +153,70 @@ class NeuralEmbedTrainer:
         self.model.W = model_data["params"]["W"]
         self.model.b = model_data["params"]["b"]
 
-        self.id2token = model_data["id2token"]
-        self.token2id = model_data["token2id"]
+        # vocab + unk
+        self.id2token = model_data.get("id2token", None)
+        self.token2id = model_data.get("token2id", None)
+        self.unk_id = model_data.get("unk_id", 0)
 
         if self.id2token is None or self.token2id is None:
             raise ValueError("Loaded model does not contain vocab!")
-        
+
         return self.model
+
+    # ---- evaluation ----
 
     def compute_perplexity(self, data_ids):
         """
         Computes the perplexity of the model on the entire dataset in chunks.
-        
+
         Args:
             data_ids (list[int]): sequence of token ids to evaluate.
 
         Returns:
             float: perplexity score (lower is better)
         """
-        total_loss = 0
+        total_loss = 0.0
         total_tokens = 0
         batch_size = self.batch_size
         block_size = self.block_size
 
-        # Loop over the dataset in non-overlapping chunks
+        # Walk the dataset in steps of block_size
         for start_idx in range(0, len(data_ids) - block_size, block_size):
-            end_idx = start_idx + block_size
-            X_block = []
-            Y_block = []
-            # Prepare batch
-            for i in range(start_idx, min(start_idx + batch_size * block_size, len(data_ids) - block_size), block_size):
+            X_block, Y_block = [], []
+            for i in range(
+                start_idx,
+                min(start_idx + batch_size * block_size, len(data_ids) - block_size),
+                block_size,
+            ):
                 X_block.append(data_ids[i : i + block_size])
                 Y_block.append(data_ids[i + 1 : i + 1 + block_size])
-            
-            X_block = np.array(X_block)
-            Y_block = np.array(Y_block)
-            if len(X_block) == 0:
+
+            if not X_block:
                 continue
-            
+
+            X_block = np.array(X_block, dtype=np.int64)
+            Y_block = np.array(Y_block, dtype=np.int64)
+
             logits = self.model.forward(X_block)
             loss, _ = self.model.cross_entropy_loss(logits, Y_block)
-            
-            total_loss += loss * X_block.shape[0]  # peso per numero di sequenze
-            total_tokens += X_block.shape[0] * block_size 
 
-        avg_loss = total_loss / total_tokens
+            total_loss += loss * X_block.shape[0]
+            total_tokens += X_block.shape[0] * block_size
+
+        avg_loss = total_loss / max(1, total_tokens)
         return float(np.exp(avg_loss))
 
-
-    def plot_perplexity(self, train_ids=None, val_ids=None, folder=None, filename="perplexity_curve.png"):
+    def plot_perplexity(
+        self, train_ids=None, val_ids=None, folder=None, filename="perplexity_curve.png"
+    ):
         """
-        Plots the perplexity over the dataset in chunks (train and validation).
+        Plot perplexity over the dataset in chunks (train and validation).
         """
         train_ids = train_ids or self.train_ids
         val_ids = val_ids or self.val_ids
 
-        # Compute perplexity in chunks of block_size*batch_size
-        train_ppl = []
-        val_ppl = []
-
-        chunk_size = self.block_size * self.batch_size * 10  # configurable
+        train_ppl, val_ppl = [], []
+        chunk_size = self.block_size * self.batch_size * 10  # tweak as you like
 
         for i in range(0, len(train_ids), chunk_size):
             train_ppl.append(self.compute_perplexity(train_ids[i : i + chunk_size]))
@@ -200,13 +225,11 @@ class NeuralEmbedTrainer:
             for i in range(0, len(val_ids), chunk_size):
                 val_ppl.append(self.compute_perplexity(val_ids[i : i + chunk_size]))
 
-        print("DEBUG: train_ppl =", train_ppl)
-        print("DEBUG: val_ppl =", val_ppl)
-        
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(train_ppl, label="Train Perplexity", color="blue")
+        if train_ppl:
+            ax.plot(train_ppl, label="Train Perplexity")
         if val_ppl:
-            ax.plot(val_ppl, label="Validation Perplexity", color="red")
+            ax.plot(val_ppl, label="Validation Perplexity")
         ax.set_xlabel("Step")
         ax.set_ylabel("Perplexity")
         ax.set_title("Perplexity over dataset")
@@ -220,7 +243,7 @@ class NeuralEmbedTrainer:
         plt.close(fig)
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity plot saved to {save_path}")
 
-
+    # ---- training ----
     def train(
         self,
         epochs=None,
@@ -228,46 +251,75 @@ class NeuralEmbedTrainer:
         force_retrain=False,
         patience=3,
         max_checkpoints=5,
-        final=False
-    
+        final=False,
     ):
         """
-        Trains the neural n-gram model using mini-batch SGD with automatic checkpointing
-        and saving of the final/best model.
+        Train the neural n-gram model using mini-batch SGD with checkpointing
+        and save the best model.
         """
-
-        epochs = self.epochs if None else epochs
-        lr = self.lr if None else lr
-        print(f"[INFO] Training for {epochs} epochs, lr={lr}")
-
-        # ---------------- MODEL INIT ----------------------
-        if self.model is None or self.model.vocab_size != len(self.tokens):
-            print("Initializing model with vocab size:", len(self.tokens)) 
-            self.model = NeuralEmbed(
-                n=self.n,
-                vocab_size=len(self.tokens),
-                embd_dim=self.embedding_dim,
+        # Must have vocab + ids from pipeline
+        if not (self.token2id and self.id2token and self.unk_id is not None):
+            raise RuntimeError(
+                "Vocabulary mapping not set. Call set_vocab(...) from the pipeline before training."
+            )
+        if not self.train_ids:
+            raise RuntimeError(
+                "train_ids not set. Pipeline must provide integer id sequences."
             )
 
-        # ---------------- LOAD FINAL MODEL ----------------
+        epochs = epochs or self.epochs
+        lr = lr or self.lr
+        final_flag = self.final if final is None else final
+        print(
+            f"{Colors.OKCYAN}[INFO]{Colors.ENDC} Training for {epochs} epochs, lr={lr}"
+        )
+        # Guard: ensure integers before casting
+        if isinstance(self.train_ids[0], str):
+            raise TypeError(
+                f"{Colors.FAIL}[FAIL]{Colors.ENDC} Trainer received string tokens. Fix mapping in pipeline.prepare_tokens() so neural models get int IDs."
+            )
+
+        self.train_ids = np.asarray(self.train_ids, dtype=np.int64).ravel().tolist()
+        if self.val_ids is not None:
+            self.val_ids = np.asarray(self.val_ids, dtype=np.int64).ravel().tolist()
+
+        # Try to load a final/best model unless forced to retrain
         if not force_retrain:
             try:
-                model = self._load_state(filename="best_model.pkl", final=final)
-                print(f"{Colors.OKGREEN}[OK]{Colors.ENDC}\n--- Loaded final saved model ---")
+                model = self._load_state(filename="best_model.pkl", final=True)
+                print(
+                    f"{Colors.OKGREEN}[OK]{Colors.ENDC} --- Loaded final saved model ---"
+                )
                 return model
             except FileNotFoundError:
-                print(f"{Colors.WARNING}[WARN]{Colors.ENDC} \n--- No final model found, training from scratch ---")
+                print(
+                    f"{Colors.WARNING}[WARN]{Colors.ENDC} --- No final model found, training from scratch ---"
+                )
 
-        # ---------------- TRAINING LOOP -------------------
+        # Model init (use vocab from mapping)
+        vocab_size = len(self.token2id)
+        if self.model is None or getattr(self.model, "vocab_size", -1) != vocab_size:
+            print(
+                f"{Colors.OKCYAN}[INFO]{Colors.ENDC} Initializing model with vocab size:",
+                vocab_size,
+            )
+            self.model = NeuralEmbed(
+                n=self.n, vocab_size=vocab_size, embd_dim=self.embedding_dim
+            )
+
+        # Keep model aware of sizes used elsewhere
+        self.model.block_size = self.block_size
+        self.model.batch_size = self.batch_size
+
         losses, val_losses = [], []
         best_val_loss = float("inf")
         patience_counter = 0
         step = 0
-        checkpoint_list = []
-        val_perplexities = []
+        checkpoint_list = []  # list[(val_loss, filename)]
+        val_per_epoch = []
 
         for epoch in range(epochs):
-            n_batches = len(self.train_ids) // self.batch_size
+            n_batches = max(1, len(self.train_ids) // self.batch_size)
             for _ in range(n_batches):
                 X_batch, y_batch = self.get_batch(self.train_ids)
                 logits = self.model.forward(X_batch)
@@ -276,134 +328,81 @@ class NeuralEmbedTrainer:
                 losses.append(loss)
 
                 if step % self.print_every == 0:
-                    print(f"Epoch {epoch+1}/{epochs}, Step {step}, Loss: {loss:.4f}")
+                    print(f"Epoch {epoch + 1}/{epochs}, Step {step}, Loss: {loss:.4f}")
                 step += 1
 
-            # ---------------- VALIDATION -------------------
+            # Validation + checkpoint
             if self.val_ids:
                 X_val, y_val = self.get_batch(self.val_ids)
                 val_logits = self.model.forward(X_val)
                 val_loss, _ = self.model.cross_entropy_loss(val_logits, y_val)
                 val_losses.append(val_loss)
-                val_perplexities.append(np.exp(val_loss))
+                val_per_epoch.append(float(np.exp(val_loss)))
 
-                # ---------------- SAVE CHECKPOINT ----------------
-                ckpt_name = f"epoch{epoch+1}_val{val_loss:.4f}.pkl"
-                self._save_state(subdir="checkpoints", filename=ckpt_name, final=final)
+                ckpt_name = f"epoch{epoch + 1}_val{val_loss:.4f}.pkl"
+                self._save_state(subdir="checkpoints", filename=ckpt_name, final=False)
                 checkpoint_list.append((val_loss, ckpt_name))
-                checkpoint_list.sort(key=lambda x: x[0])  # sort by validation loss
+                checkpoint_list.sort(key=lambda x: x[0])
 
-                # Keep only the best `max_checkpoints`
+                # Keep only the best K checkpoints on disk
                 if len(checkpoint_list) > max_checkpoints:
                     _, remove_ckpt = checkpoint_list.pop(-1)
-                    os.remove(os.path.join(self.checkpoint_dir, remove_ckpt))
+                    remove_path = os.path.join(
+                        self.root,
+                        "experiments",
+                        "models",
+                        "neural_ngrams",
+                        "checkpoints",
+                        remove_ckpt,
+                    )
+                    try:
+                        os.remove(remove_path)
+                    except FileNotFoundError:
+                        pass
 
-                # ---------------- SAVE BEST MODEL ----------------
+                # Save best model into final/
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    self._save_state(subdir="final", filename="best_model.pkl", final=final)
-                    print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Best model updated at epoch {epoch+1}")
+                    full_path = self._save_state(
+                        subdir="final", filename="best_model.pkl", final=True
+                    )
+                    self.model_path = full_path
 
+                    print(
+                        f"{Colors.OKGREEN}[OK]{Colors.ENDC} Best model updated at epoch {epoch + 1}"
+                    )
+                    patience_counter = 0
                 else:
                     patience_counter += 1
                     print(f"No improvement (patience {patience_counter}/{patience})")
 
-                # ---------------- EARLY STOPPING ----------------
                 if patience_counter >= patience:
-                    print(f"{Colors.WARNING}[WARN]{Colors.ENDC} Early stopping triggered at epoch {epoch+1}")
+                    print(
+                        f"{Colors.WARNING}[WARN]{Colors.ENDC} Early stopping at epoch {epoch + 1}"
+                    )
                     break
 
             if patience_counter >= patience:
                 break
 
+        # Diagnostic plots
         self.plot_perplexity()
 
-        # Plot val perplexity per epoch
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(val_perplexities, marker="o", label="Validation Perplexity")
-        ax.set_title("Validation Perplexity per Epoch")
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Perplexity")
-        ax.grid(True, linestyle="--", alpha=0.6)
-        ax.legend()
-
-        folder = self.model_dir
-        os.makedirs(folder, exist_ok=True)
-        save_path = os.path.join(folder, "val_perplexity_by_epoch.png")
-        fig.savefig(save_path, bbox_inches="tight", dpi=150)
-        plt.close(fig)
-        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}")
+        # Per-epoch validation perplexity plot
+        if val_per_epoch:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.plot(val_per_epoch, marker="o", label="Validation Perplexity")
+            ax.set_title("Validation Perplexity per Epoch")
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel("Perplexity")
+            ax.grid(True, linestyle="--", alpha=0.6)
+            ax.legend()
+            os.makedirs(self.model_dir, exist_ok=True)
+            save_path = os.path.join(self.model_dir, "val_perplexity_by_epoch.png")
+            fig.savefig(save_path, bbox_inches="tight", dpi=150)
+            plt.close(fig)
+            print(
+                f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}"
+            )
 
         return losses, val_losses
-
-if __name__ == "__main__":
-    from llm_project.models.configs.configs import NeuralConfig
-    from llm_project.models.neural_embeddings.trainer import NeuralNgramTrainer
-
-    # --- Hyperparameters ---
-    embedding_dim = 8
-    block_size = 3
-    batch_size = 2
-    n = 2
-    max_k = 10
-    device = "cpu"
-    print_every = 1
-
-    # --- Minimal test dataset ---
-    train_seq = ["A", "B", "C", "D", "E", "F", "G"]
-    val_seq   = ["A", "B", "C", "D", "E"]
-
-    # Create simple token mapping
-    tokens = sorted(list(set(train_seq + val_seq)))
-    token_to_id = {tok: i for i, tok in enumerate(tokens)}
-    id_to_token = {i: tok for tok, i in token_to_id.items()}
-
-    train_ids = [token_to_id[tok] for tok in train_seq]
-    val_ids   = [token_to_id[tok] for tok in val_seq]
-
-    # --- Config ---
-    config = NeuralConfig(
-        n=n,
-        vocab_size=len(tokens),
-        block_size=block_size,
-        embd_dim=embedding_dim,
-        device=device
-    )
-
-    # --- Initialize trainer ---
-    trainer = NeuralEmbedTrainer(
-        model=None,
-        tokens=tokens,
-        batch_size=batch_size,
-        train_text=None,
-        valid_text=None,
-        config=config,
-        max_k=max_k,
-        root=None,
-        print_every=print_every,
-        autoload=False,
-    )
-
-    # --- Assign ids ---
-    trainer.train_ids = train_ids
-    trainer.val_ids   = val_ids
-
-    # --- Train ---
-    losses, val_losses = trainer.train(epochs=5, lr=0.01, patience=2)
-    print("Training completed.")
-
-    # --- Generate text from a start token ---
-    start_tokens = ["A", "B"]
-    start_ids = [token_to_id[tok] for tok in start_tokens]
-
-    generated_ids, generated_text = trainer.model.generate(
-        start_ids=start_ids,
-        id2token=id_to_token,
-        max_new_tokens=5,
-        stochastic=True,
-        stop_words=set(),
-        block_size=config.block_size
-    )
-
-    print("Generated text:", generated_text)
-    

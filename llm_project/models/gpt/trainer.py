@@ -1,5 +1,5 @@
 # -------------- Imports for GPT ----------------
-from llm_project.models.configs.configs import GPTConfig
+from llm_project.models.configs.configs import GptConfig
 from llm_project.models.gpt.model import GPT
 from llm_project.models.gpt.generator import Generator
 import torch
@@ -41,39 +41,72 @@ def set_seed(seed: int = 1717):
 # def main(max_iters, embd_dim, n_layer, dropout, max_k, device, force_retrain=False):
 
 
-class GPTTrainConfig:
-    # --- model ---
-    embd_dim: int = 384
-    n_layer: int = 4
-    n_head: int = 6
-    block_size: int = 64
-    dropout: float = 0.2
+# class GptConfig:
+#     # --- model ---
+#     embd_dim: int = 384
+#     n_layer: int = 4
+#     n_head: int = 6
+#     block_size: int = 64
+#     dropout: float = 0.2
+#
+#     # --- training knobs (constants) ---
+#     batch_size: int = 32  # BATCH_SIZE
+#     max_iters: int = 5000  # MAX_ITERS
+#     eval_interval: int = 500  # EVAL_INTERVAL
+#     eval_iters: int = 200  # EVAL_ITERS
+#     learning_rate: float = 3e-4  # LEARNING_RATE
+#     weight_decay: float = 0.0
+#     grad_clip: [float] = None  # e.g. 1.0 or None
+#     log_interval: int = 500  # log_interval
+#
+#     # --- provenance / IO ---
+#     device: [str] = None  # "cuda"|"mps"|"cpu"|None(auto)
+#     pipeline_id: [str] = None  # e.g. "shakespeare-k2000"
+#     max_k: [int] = None  # BPE merges (for metadata only)
+#     vocab_size_hint: [int] = None
+#
+#     model_name: str = "gpt_shakespeare"
+#     save_dir: str = "experiments/saved_models/gpt"
+#
+#     # --- preview generation ---
+#     preview_prompt: str = "ROMEO:"
+#     preview_tokens: int = 100
+#     preview_top_k: int = 40
+#     preview_temperature: float = 0.9
+#     save_best_only: bool = False
+#
+#
+# class _CompatGptConfig:
+#     """Local flexible config that accepts any kwargs and fills defaults."""
+#
+#     def __init__(self, **kwargs):
+#         # Core model hyperparams
+#         self.vocab_size = kwargs.pop("vocab_size", 0)
+#         self.n_heads = kwargs.pop("n_heads", 6)
+#         # number of transformer blocks
+#         self.layer_dim = kwargs.pop("layer_dim", 4)
+#         self.embd_dim = kwargs.pop("embd_dim", 384)
+#         self.block_size = kwargs.pop("block_size", 64)
+#         self.dropout = kwargs.pop("dropout", 0.2)
+#         # Per-module dropouts
+#         self.embd_pdrop = kwargs.pop("embd_pdrop", self.dropout)
+#         self.attn_pdrop = kwargs.pop("attn_pdrop", self.dropout)
+#         self.resid_pdrop = kwargs.pop("resid_pdrop", self.dropout)
+#         # Device + trainer extras (batch_size, max_iters, etc.)
+#         self.device = kwargs.pop("device", "cpu")
+#         for k, v in kwargs.items():
+#             setattr(self, k, v)
 
-    # --- training knobs (constants) ---
-    batch_size: int = 32  # BATCH_SIZE
-    max_iters: int = 5000  # MAX_ITERS
-    eval_interval: int = 500  # EVAL_INTERVAL
-    eval_iters: int = 200  # EVAL_ITERS
-    learning_rate: float = 3e-4  # LEARNING_RATE
-    weight_decay: float = 0.0
-    grad_clip: [float] = None  # e.g. 1.0 or None
-    log_interval: int = 500  # log_interval
-
-    # --- provenance / IO ---
-    device: [str] = None  # "cuda"|"mps"|"cpu"|None(auto)
-    pipeline_id: [str] = None  # e.g. "shakespeare-k2000"
-    max_k: [int] = None  # BPE merges (for metadata only)
-    vocab_size_hint: [int] = None
-
-    model_name: str = "gpt_shakespeare"
-    save_dir: str = "experiments/saved_models/gpt"
-
-    # --- preview generation ---
-    preview_prompt: str = "ROMEO:"
-    preview_tokens: int = 100
-    preview_top_k: int = 40
-    preview_temperature: float = 0.9
-    save_best_only: bool = False
+# Bind the name "GptConfig" to a kwargs-accepting class
+# if _ExternalGptConfig is not None:
+#     try:
+#         _ExternalGptConfig(vocab_size=1)  # probe kwargs support
+#         GptConfig = _ExternalGptConfig
+#     except TypeError:
+#         GptConfig = _CompatGptConfig
+# else:
+#     GptConfig = _CompatGptConfig
+#
 
 
 class GptTrainer:
@@ -117,7 +150,7 @@ class GptTrainer:
 
         # track which training positions were sampled (optional)
         self.train_range = max(0, len(self.train_ids) - self.block_size - 1)
-        self.coverage = torch.zeros(train_range, dtype=torch.bool)
+        self.coverage = torch.zeros(self.train_range, dtype=torch.bool)
 
         # build/save paths like N-gram does (under experiments/saved_models/gpt/)
         self.model_folder = get_model_path(self.root, "saved_models", subdir="gpt")
@@ -237,7 +270,7 @@ class GptTrainer:
         y = torch.stack([data[i + 1 : i + self.block_size + 1] for i in ix])
         if split == "train" and self.train_range > 0:
             # mark sampled starts as covered (clamp to valid range)
-            start_ix = ix.clamp_min(0).clamp_max(train_range - 1)
+            start_ix = ix.clamp_min(0).clamp_max(self.train_range - 1)
             self.coverage[start_ix] = True
         return x.to(self.device), y.to(self.device)
 
@@ -284,6 +317,7 @@ class GptTrainer:
         steps, train_curve, val_curve = [], [], []
         best_val = float("inf")
 
+        # print_resource_usage(step=f"Starting training. Step {0}")
         for it in range(self.max_iters):
             # periodic eval
             if it % self.eval_interval == 0:
@@ -323,10 +357,10 @@ class GptTrainer:
             tokens_seen += tokens_per_iter
 
             if self.log_interval and (it % self.log_interval == 0):
-                print(f"[train] step {it:>5} | loss {loss.item():.4f}")
-                print_resource_usage(it)
+                # print_resource_usage(step=f"Train step {it}")
                 # Append ram log
                 ram_mb = psutil.virtual_memory().used / 1024**2
+                print(f"RAM: {ram_mb:.2f}mb ({ram_mb / 1024}Gb)")
                 ram_log.append(ram_mb)
 
         # final save
@@ -393,33 +427,31 @@ class GptTrainer:
         self.model.train()
         return out
 
-        def compute_perplexity(self, test_tokens, batch_size=None):
-            """Compute perplexity on a custom token list (e.g., held-out test)."""
-            if not test_tokens:
-                return float("inf")
-            bs = int(batch_size or self.batch_size)
-            data = torch.tensor(test_tokens, dtype=torch.long)
-            max_start = len(data) - (self.block_size + 1)
-            if max_start <= 0:
-                return float("inf")
-            losses = []
-            self.model.eval()
-            with torch.no_grad():
-                # iterate in chunks to avoid OOM on very long sequences
-                i = 0
-                while i < max_start:
-                    take = min(bs, max_start - i)
-                    ix = torch.arange(i, i + take)
-                    X = torch.stack([data[j : j + self.block_size] for j in ix])
-                    Y = torch.stack([data[j + 1 : j + self.block_size + 1] for j in ix])
-                    X, Y = X.to(self.device), Y.to(self.device)
-                    with torch.cuda.amp.autocast(enabled=self.use_amp):
-                        logits = self.model(X)
-                        loss = F.cross_entropy(
-                            logits.view(-1, logits.size(-1)), Y.view(-1)
-                        )
-                    losses.append(float(loss.item()))
-                    i += take
+    def compute_perplexity(self, test_tokens, batch_size=None):
+        """Compute perplexity on a custom token list (e.g., held-out test)."""
+        if not test_tokens:
+            return float("inf")
+        bs = int(batch_size or self.batch_size)
+        data = torch.tensor(test_tokens, dtype=torch.long)
+        max_start = len(data) - (self.block_size + 1)
+        if max_start <= 0:
+            return float("inf")
+        losses = []
+        self.model.eval()
+        with torch.no_grad():
+            # iterate in chunks to avoid OOM on very long sequences
+            i = 0
+            while i < max_start:
+                take = min(bs, max_start - i)
+                ix = torch.arange(i, i + take)
+                X = torch.stack([data[j : j + self.block_size] for j in ix])
+                Y = torch.stack([data[j + 1 : j + self.block_size + 1] for j in ix])
+                X, Y = X.to(self.device), Y.to(self.device)
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    logits = self.model(X)
+                    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), Y.view(-1))
+                losses.append(float(loss.item()))
+                i += take
 
         self.model.train()
         mean_loss = sum(losses) / max(1, len(losses))
@@ -520,7 +552,7 @@ if __name__ == "__main__":
     print(f"Test  tokens: {len(test_tokens)}\n")
 
     # --- Trainer config (small/fast) ---
-    cfg = GPTTrainConfig()
+    cfg = GptConfig()
     cfg.embd_dim = 128
     cfg.n_layer = 2
     cfg.n_head = 4
