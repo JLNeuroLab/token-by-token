@@ -95,6 +95,8 @@ class LM_Pipeline:
             force_retrain (bool): If True, retrain the tokenizer even if saved.
             train_limit (int): Maximum number of tokens to use from the training text.
         """
+        mt = (self.model_type or "").lower()  # Making sure it exists
+
         # --- CASE 1: tokenizer available (in the eventuality you want to add one) and train not forced
         if self.tokenizer is not None and not force_retrain:
             # Load the existing tokenizer
