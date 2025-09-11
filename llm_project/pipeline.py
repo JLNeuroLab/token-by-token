@@ -36,6 +36,8 @@ from llm_project.bpe.bytepair_encoding import BPE
 import os
 import torch
 import matplotlib.pyplot as plt
+import inspect
+import re
 
 # Model name aliases
 NGRAM_NAMES = {
@@ -96,7 +98,7 @@ class LM_Pipeline:
         # --- CASE 1: tokenizer available (in the eventuality you want to add one) and train not forced
         if self.tokenizer is not None and not force_retrain:
             # Load the existing tokenizer
-            print("Using provided tokenizer.")
+            print(f"{Colors.OKCYAN}[TOKENIZER]{Colors.ENDC} Using provided tokenizer.")
             tokens = (
                 self.tokenizer.tokens[:train_limit]
                 if train_limit
@@ -104,34 +106,34 @@ class LM_Pipeline:
             )
 
             print(
-                f"{Colors.OKCYAN}[DEBUG]{Colors.ENDC}: tokenizer.tokens length = {len(tokens)}"
+                f"{Colors.OKCYAN}[DEBUG]{Colors.ENDC} tokenizer.tokens length = {len(tokens)}"
             )
             # Returns tokens, will be useful for setting up the trainer
+
+            # Neural slow recives string instead of int ids somehow
+            # now not asume ints
             mt = (self.model_type or "").lower()
             if mt in NEURAL_ALL:
-                unique_ids = list(dict.fromkeys(tokens))  # keep order
-                self.vocab_tokens = unique_ids
-
-                # id mapping
-                self.token_to_id = {tid: tid for tid in unique_ids}  # identity
-                self.id2token = {tid: tid for tid in unique_ids}
-                self.unk_id = (
-                    0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
-                )  # Makes sure ends up as an int
-                if not isinstance(self.unk_id, int):
+                sample = tokens[0] if tokens else None
+                if isinstance(sample, int):
+                    # BPE emits ints → identity mapping
+                    unique_ids = list(dict.fromkeys(tokens))
+                    self.token_to_id = {tid: tid for tid in unique_ids}
+                    self.id2token = {tid: tid for tid in unique_ids}
+                    self.unk_id = (
+                        0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
+                    )
+                else:
+                    # BPE emits strings → build stoi/itos
+                    unique_toks = list(dict.fromkeys(tokens))
+                    self.token_to_id = {t: i for i, t in enumerate(unique_toks)}
+                    self.id2token = {i: t for i, t in enumerate(unique_toks)}
                     self.unk_id = 0
-                if hasattr(self, "token_to_id") and self.token_to_id:
-                    # keep in range; with identity mapping, max id is max token id
-                    try:
-                        max_id = max(self.token_to_id.keys())
-                        if self.unk_id < 0 or self.unk_id > max_id:
-                            self.unk_id = 0
-                    except Exception:
-                        self.unk_id = 0
 
             # ensure k is available to the rest of the pipeline (checkpoint naming, etc.)
             self.max_k = int(getattr(self.tokenizer, "k", max_k))
             setattr(self.tokenizer, "k", self.max_k)
+
             return tokens
 
         # Preparing parameters for saving and loading tokenizers
@@ -149,7 +151,9 @@ class LM_Pipeline:
 
         # CASE 2: training is not forced and saved tokenizer available
         if not force_retrain and os.path.exists(save_path):
-            print(f"\n--- Loading existing BPE tokenizer from:\n{save_path}")
+            print(
+                f"\n{Colors.OKCYAN}[TOKENIZER]{Colors.ENDC} Loading existing BPE tokenizer from:\n{save_path}"
+            )
             # Load the tokenizer
             self.tokenizer, tokens = load_tokenizer(
                 root=self.project_root,
@@ -160,7 +164,7 @@ class LM_Pipeline:
                 tokens = tokens[:train_limit]
                 self.tokenizer.tokens = tokens
             print(
-                f"{Colors.OKGREEN}[OK]{Colors.ENDC}: loaded tokenizer.tokens length = {len(tokens)}"
+                f"{Colors.OKCYAN}[DEBUG]{Colors.ENDC}: loaded tokenizer.tokens length = {len(tokens)}"
             )
             try:
                 setattr(self.tokenizer, "k", int(max_k))
@@ -172,23 +176,28 @@ class LM_Pipeline:
             setattr(self.tokenizer, "k", self.max_k)
 
             # --- build identity vocab for neural variants when loading a tokenizer ---
-            mt = (self.model_type or "").lower()
             if mt in NEURAL_ALL:
-                unique_ids = list(dict.fromkeys(tokens))  # keep order
-                self.vocab_tokens = unique_ids
-                # identity mapping
-                self.token_to_id = {tid: tid for tid in unique_ids}
-                self.id2token = {tid: tid for tid in unique_ids}
-                # robust unk_id (BPE shouldn't emit UNK; 0 is harmless fallback)
-                self.unk_id = (
-                    0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
-                )
+                sample = tokens[0] if tokens else None
+                if isinstance(sample, int):
+                    # BPE emits ints → identity mapping
+                    unique_ids = list(dict.fromkeys(tokens))
+                    self.token_to_id = {tid: tid for tid in unique_ids}
+                    self.id2token = {tid: tid for tid in unique_ids}
+                    self.unk_id = (
+                        0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
+                    )
+                else:
+                    # BPE emits strings → build stoi/itos
+                    unique_toks = list(dict.fromkeys(tokens))
+                    self.token_to_id = {t: i for i, t in enumerate(unique_toks)}
+                    self.id2token = {i: t for i, t in enumerate(unique_toks)}
+                    self.unk_id = 0
 
             return tokens
 
         if train_text is None:
             raise ValueError(
-                f"{Colors.FAIL}[ERROR]{Colors.ENDC}: train_text must be provided to train a new BPE tokenizer."
+                f"{Colors.FAIL}[ERROR]{Colors.ENDC} train_text must be provided to train a new BPE tokenizer."
             )
         # If dataloader returned list/tuple, flatten to a single string IDK LETS SEE
         # if isinstance(train_text, (list, tuple)):
@@ -199,7 +208,7 @@ class LM_Pipeline:
             train_text = train_text[:train_limit]
 
         # CASE 3: Train a new tokenizer
-        print("Training new BPE tokenizer...")
+        print(f"{Colors.OKCYAN}[TOKENIZER]{Colors.ENDC} Training new BPE tokenizer...")
         bpe = BPE(max_k=max_k, text=train_text)
         bpe.BPE_encoder()
         tokens = bpe.tokens
@@ -217,18 +226,34 @@ class LM_Pipeline:
         # Fix UNK part
         # ----- Build vocab mapping ONLY for neural trainers (identity over BPE ids) -----
         mt = (self.model_type or "").lower()
+        # if mt in NEURAL_ALL:
+        #     # tokens are already BPE integer ids; keep order, remove dups
+        #     unique_ids = list(dict.fromkeys(tokens))
+        #     self.vocab_tokens = unique_ids
+        #     # identity mapping: id -> id
+        #     self.token_to_id = {tid: tid for tid in unique_ids}
+        #     self.id2token = {tid: tid for tid in unique_ids}
+        #     # neuraln expects an unk_id; BPE shouldn’t produce UNK, use harmless default
+        #     # FROM MERGE added self. to the unk
+        #     self.unk_id = (
+        #         0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
+        #     )
         if mt in NEURAL_ALL:
-            # tokens are already BPE integer ids; keep order, remove dups
-            unique_ids = list(dict.fromkeys(tokens))
-            self.vocab_tokens = unique_ids
-            # identity mapping: id -> id
-            self.token_to_id = {tid: tid for tid in unique_ids}
-            self.id2token = {tid: tid for tid in unique_ids}
-            # neuraln expects an unk_id; BPE shouldn’t produce UNK, use harmless default
-            # FROM MERGE added self. to the unk
-            self.unk_id = (
-                0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
-            )
+            sample = tokens[0] if tokens else None
+            if isinstance(sample, int):
+                # BPE emits ints → identity mapping
+                unique_ids = list(dict.fromkeys(tokens))
+                self.token_to_id = {tid: tid for tid in unique_ids}
+                self.id2token = {tid: tid for tid in unique_ids}
+                self.unk_id = (
+                    0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
+                )
+            else:
+                # BPE emits strings → build stoi/itos
+                unique_toks = list(dict.fromkeys(tokens))
+                self.token_to_id = {t: i for i, t in enumerate(unique_toks)}
+                self.id2token = {i: t for i, t in enumerate(unique_toks)}
+                self.unk_id = 0
             final_flag = getattr(self, "final", False)
 
             # optional: persist mapping next to tokenizer
@@ -331,7 +356,9 @@ class LM_Pipeline:
             ti, vi = self.trainer.train_ids or [], self.trainer.val_ids or []
             unk_train = sum(i == unk for i in ti) / max(1, len(ti))
             unk_val = sum(i == unk for i in vi) / max(1, len(vi))
-            print(f"UNK train={unk_train:.2%}  UNK val={unk_val:.2%}")
+            print(
+                f"{Colors.OKCYAN}[CHECK OF SANIDAD]{Colors.ENDC} Good, you're not crazy. UNK train={unk_train:.2%}  UNK val={unk_val:.2%}"
+            )
 
             self.trainer.train(
                 epochs=getattr(self.config, "epochs", 3),
@@ -377,17 +404,19 @@ class LM_Pipeline:
                 patience=getattr(self.config, "patience", 3),
             )
 
-            # ids and vocab
             if hasattr(self.trainer, "set_vocab"):
-                self.trainer.self.set_vocab(
-                    self.token_to_id,
-                    self.id2token,
-                    self.unk_id,
-                )
-            self.trainer.train_ids = (
-                train_ids if train_ids is not None else train_tokens
-            )
-            self.trainer.valid_ids = valid_ids if valid_ids is not None else val_tokens
+                self.trainer.set_vocab(self.token_to_id, self.id2token, self.unk_id)
+            else:
+                # fallback if trainer has no helper
+                self.trainer.token2id = self.token_to_id
+                self.trainer.id2token = self.id2token
+                self.trainer.unk_id = self.unk_id
+
+            ids_train = train_ids if train_ids is not None else train_tokens
+            ids_val = valid_ids if valid_ids is not None else val_tokens
+            self.trainer.train_ids = ids_train
+            self.trainer.val_ids = ids_val  # common name in slow trainer
+            self.trainer.valid_ids = ids_val  # some fast trainers use this name
 
             self.trainer.train(
                 epochs=getattr(self.config, "epochs", 10),
@@ -477,6 +506,10 @@ class LM_Pipeline:
             raise NotImplementedError(
                 f"{Colors.FAIL}[ERROR]{Colors.ENDC} Model type '{self.model_type}' could not implemented."
             )
+
+    # =============================================================================================
+    #                                      TRAINING BLOCK                                        #
+    # =============================================================================================
 
     def train(
         self,
@@ -637,6 +670,14 @@ class LM_Pipeline:
             )
         return self.model
 
+    def _postprocess_text(self, text: str) -> str:
+        if not isinstance(text, str):
+            return text
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+        text = re.sub(r"([,.;:!?])([A-Za-z])", r"\1 \2", text)
+        return text.strip()
+
     def legacy_generate(self, prompt, max_length=50, from_pretrained=False):
         """
         Generate a sequence of tokens starting from a prompt using the selected LM.
@@ -701,6 +742,9 @@ class LM_Pipeline:
                     f"{Colors.WARNING}[!!!]{Colors.ENDC} No other model ready from retrieving pretrained models"
                 )
 
+    # =============================================================================================
+    #                                       GENERATE BLOCK                                       #
+    # =============================================================================================
     def generate(self, prompt, max_length=50, from_pretrained=False):
         """
         Generate a sequence using the selected LM.
@@ -768,7 +812,8 @@ class LM_Pipeline:
         ##########################
 
         if mt in NGRAM_NAMES:
-            return self.model.generate_text(prompt_tokens, max_length=max_length)
+            txt = self.model.generate_text(prompt_tokens, max_length=max_length)
+            return self._postprocess_text(txt)
 
         #######################
         # NEURAL N-GRAM MODEL #
@@ -821,19 +866,88 @@ class LM_Pipeline:
                         self.token_to_id, self.id2token, getattr(self, "unk_id", 0)
                     )
 
-                model_path = getattr(self.trainer, "model_path", None)
-                if not model_path or not os.path.exists(model_path):
-                    raise FileNotFoundError(
-                        f"No {mt} checkpoint found at: {model_path}. Train first."
-                    )
-                if hasattr(self.trainer, "_load_state"):
-                    self.trainer._load_state(model_path)
-                    self.model = self.trainer.model
-                elif hasattr(self.trainer, "load"):
-                    self.model = self.trainer.load(model_path)
+                # Try to load the final best model (no need for a path) via API
+                # so we don't need to rely completly on model_path
+                # ----- load checkpoint depending on neural family -----
+                loaded = False
+                if mt in NEURAL_FAST_NAMES:
+                    # FAST variant: keep the original model_path-based loader.
+                    model_path = getattr(self.trainer, "model_path", None)
+                    if not model_path or not os.path.exists(model_path):
+                        cpkt_dir = os.path.join(
+                            self.project_root,
+                            "experiments",
+                            "models",
+                            "neuralfast",
+                            "checkpoints",
+                        )
+                        best = os.path.join(cpkt_dir, "best_model.pkl")
+                        if os.path.exists(best):
+                            model_path = best
+                        else:
+                            import glob
+
+                            candidates = sorted(
+                                glob.glob(os.path.join(cpkt_dir, "*.pkl"))
+                            )
+                            if candidates:
+                                model_path = candidates[-1]  # the last/newest
+                            else:
+                                model_path = None
+
+                    if not model_path or not os.path.exists(model_path):
+                        raise FileNotFoundError(
+                            f"{Colors.FAIL}[ERROR]{Colors.ENDC} No {mt} checkpoint found at: {model_path}. Train {mt} first."
+                        )
+
+                    if hasattr(self.trainer, "_load_state"):
+                        # fast trainer expects full path
+                        self.trainer._load_state(model_path)
+                        self.model = self.trainer.model
+                        loaded = True
+                    elif hasattr(self.trainer, "load"):
+                        self.model = self.trainer.load(model_path)
+                        loaded = True
+                    else:
+                        raise RuntimeError(
+                            "Trainer has no loader method (_load_state/load)."
+                        )
                 else:
-                    raise RuntimeError(
-                        "Trainer has no loader method (_load_state/load)."
+                    # SLOW variant: standard location final/best_model.pkl via the trainer API.
+                    if hasattr(self.trainer, "_load_state"):
+                        try:
+                            # experiments/models/neural_ngrams/final/best_model.pkl
+                            self.model = self.trainer._load_state(
+                                filename="best_model.pkl", final=True
+                            )
+                            loaded = True
+                        except FileNotFoundError:
+                            # Fallback: newest checkpoint under experiments/models/neural_ngrams/checkpoints/
+                            try:
+                                import glob
+
+                                ckpt_dir = os.path.join(
+                                    self.project_root,
+                                    "experiments",
+                                    "models",
+                                    "neural_ngrams",
+                                    "checkpoints",
+                                )
+                                candidates = sorted(
+                                    glob.glob(os.path.join(ckpt_dir, "*.pkl"))
+                                )
+                                if candidates:
+                                    latest = os.path.basename(candidates[-1])
+                                    self.model = self.trainer._load_state(
+                                        filename=latest, final=False
+                                    )
+                                    loaded = True
+                            except FileNotFoundError:
+                                pass
+
+                if not loaded:
+                    raise FileNotFoundError(
+                        f"{Colors.FAIL}[ERROR]{Colors.ENDC} No {mt} checkpoint found. Train {mt} first."
                     )
 
             # ---- encode prompt and call correct signature ----
@@ -849,80 +963,75 @@ class LM_Pipeline:
             temperature = float(s.get("temperature", 0.9))
             block_size = getattr(self.config, "block_size", getattr(self.model, "n", 8))
 
-            # the two variants collapse to the same list[int]; some impls want start_ids named
+            # --- Robust, signature-aware call for neural variants ---
+            # One neural model accepts "stochastic", other accepts "stop_ids",
+            # "start_ids"/"max_new_tokens", or "start"/"max_length". Now inspects the
+            # callable and pass only what it supports to avoid TypeError mismatches.
+            params = set(inspect.signature(self.model.generate).parameters.keys())
+
+            kwargs = {}
+
+            # 1) Start tokens (exact name varies across implementations)
+            if "start_ids" in params:
+                kwargs["start_ids"] = prompt_ids
+            elif "start" in params:
+                kwargs["start"] = prompt_ids
+            elif "input_ids" in params:
+                kwargs["input_ids"] = prompt_ids
+
+            # 2) Length / sampling knobs (only set those the function declares)
+            if "max_new_tokens" in params:
+                kwargs["max_new_tokens"] = max_length
+            elif "max_length" in params:
+                kwargs["max_length"] = max_length
+
+            if "top_k" in params:
+                kwargs["top_k"] = top_k
+            if "top_p" in params:
+                kwargs["top_p"] = top_p
+            if "temperature" in params:
+                kwargs["temperature"] = temperature
+            if "block_size" in params:
+                kwargs["block_size"] = block_size
+            if "id2token" in params:
+                kwargs["id2token"] = self.id2token
+
+            # 3) Special controls: stochastic vs explicit stop_ids vs unk handling
+            if "stochastic" in params:
+                kwargs["stochastic"] = True
+            if "unk_id" in params:
+                kwargs["unk_id"] = unk_id
+            if "stop_ids" in params:
+                # IMPORTANT: stop_ids must be an iterable; use a small set containing unk_id
+                kwargs["stop_ids"] = {unk_id}
+
+            # 4) Call with filtered kwargs. If a downstream model still has a quirky positional
+            #    signature, you can add a positional fallback—but in practice this kwargs call
+            #    is enough for both neural_slow and neuralfast you're running.
+            # Primary attempt with filtered kwargs
             try:
                 generated_ids, generated_tokens, generated_text = self.model.generate(
-                    start_ids=prompt_ids,
-                    max_new_tokens=max_length,
-                    stochastic=True,
-                    top_k=top_k,
-                    top_p=top_p,
-                    temperature=temperature,
-                    block_size=block_size,
-                    id2token=self.id2token,
-                    unk_id=unk_id,
+                    **kwargs
                 )
             except TypeError:
-                # fallback to positional signature
+                print(
+                    f"{Colors.WARNING}[WARNING]{Colors.ENDC} Generating from the except block"
+                )
+                # Last-resort positional fallback (ensure stop_ids is a list at the tail)
                 generated_ids, generated_tokens, generated_text = self.model.generate(
                     prompt_ids,
                     max_length,
-                    True,
-                    top_k,
+                    top_k
+                    if "stochastic" not in params
+                    else True,  # tolerate odd 3rd arg slots
                     top_p,
                     temperature,
                     block_size,
                     self.id2token,
-                    unk_id,
+                    [unk_id],  # iterable, not int
                 )
+            generated_text = self._postprocess_text(generated_text)
             return generated_text
-
-            # ----------------------------------------------------
-            # # --- Convert prompt tokens to IDs, map unknowns to UNK ---
-            # unk_id = self.token_to_id.get("UNK", 0)
-            # prompt_ids = [self.token_to_id.get(
-            #     tok, unk_id) for tok in prompt_tokens]
-            # # --- Generation for different model types ---
-            # if self.model_type.lower() == "ngram":
-            #     return self.model.generate_text(prompt_tokens, max_length=max_length)
-            #
-            # elif self.model_type.lower() in ["neural", "neuralfast"]:
-            #     # Decide which generate method to use
-            #     if self.model_type.lower() == "neural":
-            #         generated_ids, generated_tokens, generated_text = self.model.generate(
-            #             start_ids=prompt_ids,
-            #             max_new_tokens=max_length,
-            #             stochastic=True,
-            #             top_k=30,
-            #             top_p=0.9,
-            #             temperature=1.0,
-            #             block_size=getattr(
-            #                 self.config, "block_size", self.model.n),
-            #             id2token=self.id2token,
-            #             unk_id=unk_id
-            #         )
-            #     else:  # neuralfast
-            #         device = next(self.model.parameters()).device
-            #         prompt_tensor = torch.tensor(
-            #             [prompt_ids], dtype=torch.long).to(device)
-            #         generated_ids, generated_tokens, generated_text = self.model.generate(
-            #             start_ids=prompt_tensor[0].tolist(),
-            #             max_new_tokens=max_length,
-            #             stochastic=True,
-            #             top_k=30,
-            #             top_p=0.9,
-            #             temperature=1.0,
-            #             block_size=getattr(
-            #                 self.config, "block_size", self.model.n),
-            #             id2token=self.id2token,
-            #             unk_id=unk_id
-            #         )
-            #
-            #     return generated_text
-            #
-            # else:
-            #     raise NotImplementedError(
-            #         f"Generation for model type '{self.model_type}' is not implemented.")
 
         #######################
         #      GPT  MODEL     #
@@ -948,133 +1057,133 @@ class LM_Pipeline:
                     f"{Colors.FAIL}[ERROR]{Colors.ENDC} Cannot infer BPE k. Make sure prepare_tokens() ran and set self.max_k."
                 )
 
-                # ---- ensure vocab_size matches training (from tokenizer mapping) ----
-                if (
-                    hasattr(self, "tokenizer")
-                    and hasattr(self.tokenizer, "token_to_id")
-                    and hasattr(self.tokenizer, "id_to_token")
-                ):
-                    self.gpt_stoi = dict(self.tokenizer.token_to_id)
-                    self.gpt_itos = dict(self.tokenizer.id_to_token)
-                    self.decode_mode = "bpe"
-                    self.config.vocab_size = len(self.gpt_stoi)
+            # ---- ensure vocab_size matches training (from tokenizer mapping) ----
+            if (
+                hasattr(self, "tokenizer")
+                and hasattr(self.tokenizer, "token_to_id")
+                and hasattr(self.tokenizer, "id_to_token")
+            ):
+                self.gpt_stoi = dict(self.tokenizer.token_to_id)
+                self.gpt_itos = dict(self.tokenizer.id_to_token)
+                self.decode_mode = "bpe"
+                self.config.vocab_size = len(self.gpt_stoi)
+            else:
+                raise RuntimeError(
+                    f"{Colors.FAIL}[ERROR]{Colors.ENDC} Tokenizer has no token_to_id/id_to_token. Run a short GPT train once so the vocab can be reconstructed."
+                )
+
+            # ---- lazy-load GPT checkpoint (trainer *requires* a tokens dict) ----
+            if self.model is None:
+                bs = int(getattr(self.config, "block_size", 64))
+                V = int(self.config.vocab_size)
+                # << << << < HEAD
+                # COVER the vocab: ensure max id is V-1 so trainer infers the right vocab size.
+                cover = list(range(V))  # [0, 1, ..., V-1]
+                # ensure length >= bs+2
+                pad = max(0, (bs + 2) - len(cover))
+                train_seq = cover + ([0] * pad)
+                # validation: at least bs+1 long, and also contains the max id
+                val_base = cover[: max(0, bs + 1)]
+                if (V - 1) not in val_base:
+                    val_base.append(V - 1)
+                if len(val_base) < (bs + 1):
+                    val_base += [0] * ((bs + 1) - len(val_base))
+                tokens_dict = {"train": train_seq, "validation": val_base}
+
+                try:
+                    self.trainer = GptTrainer(
+                        config=self.config, tokens=tokens_dict, model=None, k=k
+                    )
+                    print(
+                        f"{Colors.OKCYAN}[MODEL]{Colors.ENDC} Program will load GPT from: {self.trainer.model_path}, vocab_size={self.config.vocab_size}"
+                    )
+
+                except TypeError:
+                    # older signature (config, tokens, model, root=None, k=None)
+                    self.trainer = GptTrainer(self.config, tokens_dict, None, k=k)
+                    print(
+                        f"{Colors.OKWARN}[ERROR]{Colors.ENDC} While trying to load GPT from: {self.trainer.model_path}, vocab_size={self.config.vocab_size}"
+                    )
+
+                # Optional: sanity print to confirm the expected checkpoint path
+                model_path = getattr(self.trainer, "model_path", None)
+                if not model_path or not os.path.exists(model_path):
+                    raise FileNotFoundError(
+                        f"{Colors.FAIL}[ERROR]{Colors.ENDC} GPT checkpoint not found. Expected at: {model_path}. "
+                        "Train first (or pass --force_model), then run --mode generate."
+                    )
+
+                if hasattr(self.trainer, "_load_state"):
+                    self.trainer._load_state(model_path)
+                    self.model = self.trainer.model
+                elif hasattr(self.trainer, "load"):
+                    self.model = self.trainer.load(model_path)
                 else:
                     raise RuntimeError(
-                        f"{Colors.FAIL}[ERROR]{Colors.ENDC} Tokenizer has no token_to_id/id_to_token. Run a short GPT train once so the vocab can be reconstructed."
+                        f"{Colors.FAIL}[ERROR]{Colors.ENDC} Trainer has no loader method (_load_state/load)."
                     )
 
-                # ---- lazy-load GPT checkpoint (trainer *requires* a tokens dict) ----
-                if self.model is None:
-                    bs = int(getattr(self.config, "block_size", 64))
-                    V = int(self.config.vocab_size)
-                    # << << << < HEAD
-                    # COVER the vocab: ensure max id is V-1 so trainer infers the right vocab size.
-                    cover = list(range(V))  # [0, 1, ..., V-1]
-                    # ensure length >= bs+2
-                    pad = max(0, (bs + 2) - len(cover))
-                    train_seq = cover + ([0] * pad)
-                    # validation: at least bs+1 long, and also contains the max id
-                    val_base = cover[: max(0, bs + 1)]
-                    if (V - 1) not in val_base:
-                        val_base.append(V - 1)
-                    if len(val_base) < (bs + 1):
-                        val_base += [0] * ((bs + 1) - len(val_base))
-                    tokens_dict = {"train": train_seq, "validation": val_base}
+                # keep k coherent for later
+                if getattr(self, "max_k", None) is None:
+                    self.max_k = k
 
-                    try:
-                        self.trainer = GptTrainer(
-                            config=self.config, tokens=tokens_dict, model=None, k=k
-                        )
-                        print(
-                            f"{Colors.OKCYAN}[MODEL]{Colors.ENDC} Program will load GPT from: {self.trainer.model_path}, vocab_size={self.config.vocab_size}"
-                        )
+            # --- Sampling knobs from __main__ (pipe.samplingggggg) ---
+            s = getattr(self, "sampling", {}) or {}
+            top_k = int(s.get("top_k", 40))
+            top_p = float(s.get("top_p", 0.9))
+            temperature = float(s.get("temperature", 0.9))
 
-                    except TypeError:
-                        # older signature (config, tokens, model, root=None, k=None)
-                        self.trainer = GptTrainer(self.config, tokens_dict, None, k=k)
-                        print(
-                            f"{Colors.OKWARN}[ERROR]{Colors.ENDC} While trying to load GPT from: {self.trainer.model_path}, vocab_size={self.config.vocab_size}"
-                        )
-
-                    # Optional: sanity print to confirm the expected checkpoint path
-                    model_path = getattr(self.trainer, "model_path", None)
-                    if not model_path or not os.path.exists(model_path):
-                        raise FileNotFoundError(
-                            f"{Colors.FAIL}[ERROR]{Colors.ENDC} GPT checkpoint not found. Expected at: {model_path}. "
-                            "Train first (or pass --force_model), then run --mode generate."
-                        )
-
-                    if hasattr(self.trainer, "_load_state"):
-                        self.trainer._load_state(model_path)
-                        self.model = self.trainer.model
-                    elif hasattr(self.trainer, "load"):
-                        self.model = self.trainer.load(model_path)
+            # --- Encode prompt to ids using the SAME mapping used during training ---
+            if prompt_tokens and isinstance(prompt_tokens[0], int):
+                # already BPE int-ids
+                prompt_ids = prompt_tokens
+                self.decode_mode = (
+                    "bpe" if hasattr(self.tokenizer, "decode") else "local"
+                )
+            else:
+                if not hasattr(self, "gpt_stoi"):
+                    if hasattr(self, "tokenizer") and hasattr(
+                        self.tokenizer, "token_to_id"
+                    ):
+                        self.gpt_stoi = dict(self.tokenizer.token_to_id)
+                        self.gpt_itos = dict(self.tokenizer.id_to_token)
+                        self.decode_mode = "bpe"
                     else:
                         raise RuntimeError(
-                            f"{Colors.FAIL}[ERROR]{Colors.ENDC} Trainer has no loader method (_load_state/load)."
+                            f"{Colors.FAIL}[ERROR]{Colors.ENDC} GPT stoi mapping not found; persist vocab or generate right after training."
                         )
-
-                    # keep k coherent for later
-                    if getattr(self, "max_k", None) is None:
-                        self.max_k = k
-
-                # --- Sampling knobs from __main__ (pipe.sampling) ---
-                s = getattr(self, "sampling", {}) or {}
-                top_k = int(s.get("top_k", 40))
-                top_p = float(s.get("top_p", 0.9))
-                temperature = float(s.get("temperature", 0.9))
-
-                # --- Encode prompt to ids using the SAME mapping used during training ---
-                if prompt_tokens and isinstance(prompt_tokens[0], int):
-                    # already BPE int-ids
-                    prompt_ids = prompt_tokens
-                    self.decode_mode = (
-                        "bpe" if hasattr(self.tokenizer, "decode") else "local"
-                    )
-                else:
-                    if not hasattr(self, "gpt_stoi"):
-                        if hasattr(self, "tokenizer") and hasattr(
-                            self.tokenizer, "token_to_id"
-                        ):
-                            self.gpt_stoi = dict(self.tokenizer.token_to_id)
-                            self.gpt_itos = dict(self.tokenizer.id_to_token)
-                            self.decode_mode = "bpe"
-                        else:
-                            raise RuntimeError(
-                                f"{Colors.FAIL}[ERROR]{Colors.ENDC} GPT stoi mapping not found; persist vocab or generate right after training."
-                            )
-                    prompt_ids = [
-                        self.gpt_stoi[t] for t in prompt_tokens if t in self.gpt_stoi
-                    ]
-
-                #  Build generator and sample (always run)
-                gen = Generator(
-                    model=self.model,
-                    tokenizer=None,  # we pass raw ids; we decode below
-                    max_new_tokens=max_length,
-                    top_k=top_k,
-                    top_p=top_p,
-                    temperature=temperature,
-                    mode="auto",
-                )
-                out_ids = gen.generate(prompt_ids)
-
-                #  Decode
-                if getattr(self, "decode_mode", "bpe") == "bpe" and hasattr(
-                    self.tokenizer, "decode"
-                ):
-                    return self.tokenizer.decode(out_ids)
-
-                toks = [
-                    self.gpt_itos[i]
-                    for i in out_ids
-                    if i in getattr(self, "gpt_itos", {})
+                prompt_ids = [
+                    self.gpt_stoi[t] for t in prompt_tokens if t in self.gpt_stoi
                 ]
-                return "".join(toks)
 
-            raise NotImplementedError(
-                f"{Colors.FAIL}[ERROR]{Colors.ENDC} Generation for model type '{self.model_type}' was not implemented."
+            #  Build generator and sample (always run)
+            gen = Generator(
+                model=self.model,
+                tokenizer=None,  # we pass raw ids; we decode below
+                max_new_tokens=max_length,
+                top_k=top_k,
+                top_p=top_p,
+                temperature=temperature,
+                mode="auto",
             )
+            out_ids = gen.generate(prompt_ids)
+
+            #  Decode
+            if getattr(self, "decode_mode", "bpe") == "bpe" and hasattr(
+                self.tokenizer, "decode"
+            ):
+                return self.tokenizer.decode(out_ids)
+
+            toks = [
+                self.gpt_itos[i] for i in out_ids if i in getattr(self, "gpt_itos", {})
+            ]
+            gen_out = "".join(toks)
+            p_gen_out = self._postprocess_text(gen_out)
+            return p_gen_out
+
+        raise NotImplementedError(
+            f"{Colors.FAIL}[ERROR]{Colors.ENDC} Generation for model type '{self.model_type}' was not possible to implememt"
+        )
 
 
 # ------------------ CLEAN MAIN (pipeline) -------------------
@@ -1082,7 +1191,7 @@ if __name__ == "__main__":
     import argparse
     from types import SimpleNamespace
 
-    # Data loader
+    # Data loader in case
     try:
         from llm_project.utils.dataloader import load_shakespeare
     except Exception as e:
@@ -1152,11 +1261,6 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--weight_decay", type=float, default=0.0)
     parser.add_argument("--grad_clip", type=float, default=None)
-
-    # mode
-    parser.add_argument(
-        "--mode", type=str, choices=["train", "generate"], default="train"
-    )
 
     # generation args
     parser.add_argument("--prompt", type=str, default="", help="Prompt for generation")
@@ -1235,6 +1339,9 @@ if __name__ == "__main__":
         "temperature": args.temperature,
     }
 
+    ##############
+    # MODE TRAIN #
+    ##############
     if args.mode == "train":
         model, train_tokens, valid_tokens = pipe.train(
             train_text=train_text,
@@ -1245,15 +1352,30 @@ if __name__ == "__main__":
             train_limit=args.train_limit,
             valid_limit=args.valid_limit,
         )
+        k = getattr(
+            getattr(pipe, "tokenizer", None), "k", getattr(pipe, "max_k", "n/a")
+        )
 
-        # quick sample
-        if args.model in {"ngram", "neural_slow", "neuraln", "neural", "neuralfast"}:
-            out = pipe.generate("To be or not to", max_length=50)
-            print(f"\n[Sample ({args.model})]\n", out)
-        elif args.model == "gpt":
-            out = pipe.generate(prompt="ROMEO:", max_length=80)
-            print("\n[Sample (gpt)]\n", out)
+        # with a quick sample
+        if args.model in NGRAM_NAMES:
+            out = pipe.generate("To be or not to", max_length=70)
+            print(f"\nSample of {Colors.OKCYAN}[{args.model}]{Colors.ENDC}\n")
+            print(out)
+            n_val = getattr(args, "n", "n/a")
+            print("\n===============================================================")
+            print(f"|| n: {n_val} || merges k: {k} ||")
 
+        elif args.model in NEURAL_ALL or GPT_NAMES:
+            out = pipe.generate("To be or not to", max_length=70)
+            print(f"\nSample of {Colors.OKCYAN}[{args.model}]{Colors.ENDC}\n", out)
+            print("=================================================================")
+            print(
+                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
+            )
+
+    #################
+    # MODE GENERATE #
+    #################
     elif args.mode == "generate":  # generate
         _ = pipe.prepare_tokens(
             train_text=train_text,
@@ -1263,9 +1385,24 @@ if __name__ == "__main__":
             final=False,
         )
         out_text = pipe.generate(prompt=args.prompt, max_length=args.max_new_tokens)
-        print("\n=== Generated Text ===\n")
+        k = getattr(
+            getattr(pipe, "tokenizer", None), "k", getattr(pipe, "max_k", "n/a")
+        )
+        print(f"\n=== Generated Text {Colors.OKCYAN}[{args.model}]{Colors.ENDC} ===\n")
         print(out_text)
+        print("\n================================================")
 
+        if args.model in NGRAM_NAMES:
+            n_val = getattr(args, "n", "n/a")
+            print(f"|| n: {n_val} || merges k: {k} ||")
+        else:
+            print(
+                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
+            )
+
+    #################
+    # MODE COMPARE  #
+    #################
     elif args.mode == "compare":
         # Ensure tokenizer exists (and identity vocab)
         base = LM_Pipeline(
@@ -1291,7 +1428,9 @@ if __name__ == "__main__":
 
         for m in [s.strip() for s in args.compare_models.split(",") if s.strip()]:
             if m not in (NEURAL_SLOW_NAMES | NEURAL_FAST_NAMES):
-                print(f"[skip] {m} not a supported neural comparator")
+                print(
+                    f"{Colors.WARNING}[SKIP]{Colors.ENDC} {m} is not a supported name/model for neural comparator"
+                )
                 continue
 
             cfg = NeuralConfig(
@@ -1310,4 +1449,8 @@ if __name__ == "__main__":
             p.sampling = sampling
 
             out = p.generate(prompt=args.prompt, max_length=args.max_new_tokens)
-            print(f"\n=== {m} ===\n{out}\n")
+            print(f"\n=== {m} ===\n{out}")
+            print("====================================================")
+            print(
+                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} ||\n"
+            )
