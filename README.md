@@ -199,14 +199,13 @@ To evaluate the impact of BPE vocabulary size, we trained the n-gram model with 
 ![Classic n-gram Perplexity](docs/ngram/PPL_vs_k_(n=3).png)
 
 ---
-#### Text generated examples
-**Prompt:** `"To be, or not to"`  
-**Output:**  ![Example of text generation](docs/ngram/text_gen.png)
+#### Text generated examples  
+![Example of text generation](docs/ngram/ngram_generatedtxt.png)
 
 ---
-### 4.2 Neural n-gram Model
+### 4.2 Neural Embedding Model
 
-The **neural n-gram model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
+The **neural n-embedding model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
 
 **Implementation Details:**
 
@@ -223,15 +222,14 @@ The **neural n-gram model** extends the classic n-gram by learning embeddings fo
 **Plots:**
 
 **Training Loss Curve:**  
-![Neural n-gram Loss](docs/neural_ngram/loss_curves.png)
+![Neural emb Loss](docs/neural_ngram/loss_curves.png)
 
 **Perplexity over Epochs / Validation Comparison:**  
-![Neural n-gram Perplexity](docs/neural_ngram/val_perplexity_by_epoch.png)
+![Neural emb Perplexity](docs/neural_ngram/val_perplexity_by_epoch.png)
 
 ---
-#### Text generated examples
-**Prompt:** `"Once upon a time"`  
-**Output:**  `"To be, or not to beloving than beloved. CHARMIAN I had rather heat my liver with drinking. ALEXAS Nay, hear him. CHARMIAN Good now, some excellent fortune! Let me be married to three kings in a foren"` 
+#### Text generated examples 
+![Example of text generation](docs/neural_ngram/neural_generatedtxt.png)
 
 ---
 
@@ -260,6 +258,10 @@ To evaluate the GPT models, we selected the baseline and the best experiments tr
 **Additional Note:**  
 - `Z_Long_Training_Best_Guess` (15,000 iterations, embedding 256, 6 layers) achieved the **lowest validation loss (2.6106)**, but the improvement is largely due to the longer training schedule.
 - All other experiments were run for 5,000 iterations to allow a **fair comparison of architecture and hyperparameters**.
+
+---
+#### Text generated examples    
+![Example of text generation](docs/gpt/gpt_generatedtxt.png)
 
 --- 
 #### Plots – Selected GPT Experiments
