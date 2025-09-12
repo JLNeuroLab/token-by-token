@@ -199,9 +199,13 @@ To evaluate the impact of BPE vocabulary size, we trained the n-gram model with 
 ![Classic n-gram Perplexity](docs/ngram/PPL_vs_k_(n=3).png)
 
 ---
-### 4.2 Neural n-gram Model
+#### Text generated examples  
+![Example of text generation](docs/ngram/ngram_generatedtxt.png)
 
-The **neural n-gram model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
+---
+### 4.2 Neural Embedding Model
+
+The **neural n-embedding model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
 
 **Implementation Details:**
 
@@ -218,13 +222,14 @@ The **neural n-gram model** extends the classic n-gram by learning embeddings fo
 **Plots:**
 
 **Training Loss Curve:**  
-![Neural n-gram Loss](experiments/saved_models/neural_ngram/loss_curve.png)
+![Neural emb Loss](docs/neural_ngram/loss_curves.png)
 
 **Perplexity over Epochs / Validation Comparison:**  
-![Neural n-gram Perplexity](experiments/saved_models/neural_ngram/perplexity.png)
+![Neural emb Perplexity](docs/neural_ngram/val_perplexity_by_epoch.png)
 
-**Vocabulary Growth:**  
-![Neural n-gram Vocabulary](experiments/saved_models/neural_ngram/vocabulary_growth.png)
+---
+#### Text generated examples 
+![Example of text generation](docs/neural_ngram/neural_generatedtxt.png)
 
 ---
 
@@ -253,6 +258,10 @@ To evaluate the GPT models, we selected the baseline and the best experiments tr
 **Additional Note:**  
 - `Z_Long_Training_Best_Guess` (15,000 iterations, embedding 256, 6 layers) achieved the **lowest validation loss (2.6106)**, but the improvement is largely due to the longer training schedule.
 - All other experiments were run for 5,000 iterations to allow a **fair comparison of architecture and hyperparameters**.
+
+---
+#### Text generated examples    
+![Example of text generation](docs/gpt/gpt_generatedtxt.png)
 
 --- 
 #### Plots – Selected GPT Experiments
