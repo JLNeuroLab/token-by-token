@@ -10,7 +10,12 @@ import matplotlib.pyplot as plt
 from torch.nn import functional as F
 from torch import nn
 import json
-from llm_project.utils.debugg_utils import print_resource_usage, Colors
+from llm_project.utils.debugg_utils import (
+    print_resource_usage,
+    Colors,
+    get_proc_mem_mb,
+    get_gpu_mem_mb,
+)
 
 # -------------- Imports for file handling ----------------
 from llm_project.utils.dataloader import load_shakespeare
@@ -313,6 +318,8 @@ class GptTrainer:
             model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
         )
         scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
+        # if torch.cuda.is_available():
+        #     torch.cuda.reset_peak_memory_stats()
 
         steps, train_curve, val_curve = [], [], []
         best_val = float("inf")
@@ -324,9 +331,6 @@ class GptTrainer:
                 losses = self._estimate_loss(self.eval_iters)
                 tr, vl = losses["train"], losses["val"]
                 ppl = math.exp(vl)
-                print(
-                    f"[step {it:>5}] train {tr:.4f} | val {vl:.4f} | val ppl {ppl:.2f}"
-                )
                 steps.append(it)
                 train_curve.append(tr)
                 val_curve.append(vl)
@@ -359,8 +363,12 @@ class GptTrainer:
             if self.log_interval and (it % self.log_interval == 0):
                 # print_resource_usage(step=f"Train step {it}")
                 # Append ram log
-                ram_mb = psutil.virtual_memory().used / 1024**2
-                print(f"RAM: {ram_mb:.2f}mb ({ram_mb / 1024}Gb)")
+                ram_mb, _ = get_proc_mem_mb()  # RAM for this process
+                ga_mb, _, gp_mb = get_gpu_mem_mb()
+                # ram_mb = psutil.virtual_memory().used / 1024**2  RAM FOR WHOLE SYSTEM
+                print(
+                    f"[step {it:>5}] train {tr:.4f} | val {vl:.4f} | val ppl {ppl:.2f} | RAM: {ram_mb:.2f}mb ({ram_mb / 1024:.2f}GB) | GPU (memory):  GPU: {((gp_mb if gp_mb is not None else (ga_mb or 0.0)) / 1024):.2f}GB"
+                )
                 ram_log.append(ram_mb)
 
         # final save

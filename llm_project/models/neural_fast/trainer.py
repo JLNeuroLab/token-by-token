@@ -1,10 +1,11 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+
+# import torch.nn as nn
+# import torch.nn.functional as F
 
 import os
 import matplotlib.pyplot as plt
-from llm_project.utils.debugg_utils import Colors
+from llm_project.utils.debugg_utils import Colors, get_proc_mem_mb
 from llm_project.models.neural_fast.model import NeuralLanguageModel
 from llm_project.utils.file_manager import (
     get_project_root,
@@ -339,7 +340,10 @@ class NeuralTrainer:
                 epoch_loss += loss
 
                 if step % self.print_every == 0:
-                    print(f"Epoch {epoch + 1}/{epochs}, Step {step}, Loss: {loss:.4f}")
+                    ram_mb, _ = get_proc_mem_mb()
+                    print(
+                        f"Epoch {epoch + 1}/{epochs} | Step {step} | Loss: {loss:.4f} | RAM: {ram_mb:.2f}mb ({ram_mb / 1024:.2f}Gb)"
+                    )
                 step += 1
 
             avg_epoch_loss = epoch_loss / n_batches
