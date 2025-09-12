@@ -680,69 +680,69 @@ class LM_Pipeline:
         text = re.sub(r"([,.;:!?])([A-Za-z])", r"\1 \2", text)
         return text.strip()
 
-    def legacy_generate(self, prompt, max_length=50, from_pretrained=False):
-        """
-        Generate a sequence of tokens starting from a prompt using the selected LM.
+    # def legacy_generate(self, prompt, max_length=50, from_pretrained=False):
+    #     """
+    #     Generate a sequence of tokens starting from a prompt using the selected LM.
 
-        Args:
-            prompt (str or list): Prompt text or token list.
-            max_length (int): Maximum number of tokens to generate.
-            from_pretrained (bool): If True, attempt to load a pre-trained model from final folder.
+    #     Args:
+    #         prompt (str or list): Prompt text or token list.
+    #         max_length (int): Maximum number of tokens to generate.
+    #         from_pretrained (bool): If True, attempt to load a pre-trained model from final folder.
 
-        Returns:
-            list: Generated token sequence.
-        """
-        # --- Load pre-trained model if requested ---
-        if from_pretrained and self.model is None:
-            self.load_pretrained()
-            if self.model is None:
-                raise ValueError("No pretrained model found.")
+    #     Returns:
+    #         list: Generated token sequence.
+    #     """
+    #     # --- Load pre-trained model if requested ---
+    #     if from_pretrained and self.model is None:
+    #         self.load_pretrained()
+    #         if self.model is None:
+    #             raise ValueError("No pretrained model found.")
 
-        # --- Ensure model is present ---
-        if self.model is None:
-            raise ValueError(
-                "No model available. Train a model first or set from_pretrained=True."
-            )
+    #     # --- Ensure model is present ---
+    #     if self.model is None:
+    #         raise ValueError(
+    #             "No model available. Train a model first or set from_pretrained=True."
+    #         )
 
-        # --- Tokenize prompt ---
-        if isinstance(prompt, str):
-            if self.tokenizer is None:
-                raise ValueError(
-                    f"{Colors.FAIL}[ERROR]{Colors.ENDC} Tokenizer is not initialized. Cannot encode string prompt."
-                )
-            prompt_tokens = self.tokenizer.BPE_segmenter(prompt)
-        else:
-            prompt_tokens = prompt
+    #     # --- Tokenize prompt ---
+    #     if isinstance(prompt, str):
+    #         if self.tokenizer is None:
+    #             raise ValueError(
+    #                 f"{Colors.FAIL}[ERROR]{Colors.ENDC} Tokenizer is not initialized. Cannot encode string prompt."
+    #             )
+    #         prompt_tokens = self.tokenizer.BPE_segmenter(prompt)
+    #     else:
+    #         prompt_tokens = prompt
 
-        # << << << < HEAD
-        # --- Load pre-trained model if requested ---
-        if from_pretrained:
-            if self.model_type.lower() == "ngram":
-                model_fname = (
-                    f"ngram_model_n{self.config.n}_k{self.tokenizer.max_k}.pkl"
-                )
-                model_folder = get_model_path(
-                    self.project_root, category="models", subdir="ngram", final=True
-                )
-                model_path = os.path.join(model_folder, model_fname)
-                if os.path.exists(model_path):
-                    print(f"Loading pre-trained N-gram model from: {model_path}")
-                    trainer = NGramTrainer(
-                        config=self.config,
-                        model=None,
-                        tokens=prompt_tokens,
-                        k=self.config.n,
-                    )
-                    self.model = trainer._load_state(model_path, final=True)
-                else:
-                    print(
-                        f"{Colors.WARNING}[!!!]{Colors.ENDC} No pre-trained N-gram model found in final folder. Using current model."
-                    )
+    #     # << << << < HEAD
+    #     # --- Load pre-trained model if requested ---
+    #     if from_pretrained:
+    #         if self.model_type.lower() == "ngram":
+    #             model_fname = (
+    #                 f"ngram_model_n{self.config.n}_k{self.tokenizer.max_k}.pkl"
+    #             )
+    #             model_folder = get_model_path(
+    #                 self.project_root, category="models", subdir="ngram", final=True
+    #             )
+    #             model_path = os.path.join(model_folder, model_fname)
+    #             if os.path.exists(model_path):
+    #                 print(f"Loading pre-trained N-gram model from: {model_path}")
+    #                 trainer = NGramTrainer(
+    #                     config=self.config,
+    #                     model=None,
+    #                     tokens=prompt_tokens,
+    #                     k=self.config.n,
+    #                 )
+    #                 self.model = trainer._load_state(model_path, final=True)
+    #             else:
+    #                 print(
+    #                     f"{Colors.WARNING}[!!!]{Colors.ENDC} No pre-trained N-gram model found in final folder. Using current model."
+    #                 )
 
-            else:
-                raise NotImplementedError(
-                    f"{Colors.WARNING}[!!!]{Colors.ENDC} No other model ready from retrieving pretrained models"
-                )
+    #         else:
+    #             raise NotImplementedError(
+    #                 f"{Colors.WARNING}[!!!]{Colors.ENDC} No other model ready from retrieving pretrained models"
+    #             )
 
     # =============================================================================================
     #                                       GENERATE BLOCK                                       #
