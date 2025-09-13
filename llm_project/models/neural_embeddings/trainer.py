@@ -9,7 +9,7 @@ from llm_project.utils.file_manager import (
     get_project_root,
 )
 from llm_project.models.neural_embeddings.model import NeuralEmbed
-from llm_project.utils.debugg_utils import Colors
+from llm_project.utils.debugg_utils import Colors, get_proc_mem_mb, get_proc_cpu_percent
 
 
 class NeuralEmbedTrainer:
@@ -159,8 +159,11 @@ class NeuralEmbedTrainer:
         self.unk_id = model_data.get("unk_id", 0)
 
         if self.id2token is None or self.token2id is None:
-            raise ValueError("Loaded model does not contain vocab!")
+            raise ValueError(
+                f"{Colors.FAIL}[FAIL]{Colors.ENDC} Loaded model does not contain vocab!"
+            )
 
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model loaded from {filename}")
         return self.model
 
     # ---- evaluation ----
@@ -260,11 +263,11 @@ class NeuralEmbedTrainer:
         # Must have vocab + ids from pipeline
         if not (self.token2id and self.id2token and self.unk_id is not None):
             raise RuntimeError(
-                "Vocabulary mapping not set. Call set_vocab(...) from the pipeline before training."
+                f"{Colors.WARNING}[WARNING]{Colors.ENDC}Vocabulary mapping not set. Call set_vocab(...) from the pipeline before training."
             )
         if not self.train_ids:
             raise RuntimeError(
-                "train_ids not set. Pipeline must provide integer id sequences."
+                f"{Colors.WARNING}[WARNING]{Colors.ENDC} train_ids not set. Pipeline must provide integer id sequences."
             )
 
         epochs = epochs or self.epochs
@@ -278,7 +281,8 @@ class NeuralEmbedTrainer:
             raise TypeError(
                 f"{Colors.FAIL}[FAIL]{Colors.ENDC} Trainer received string tokens. Fix mapping in pipeline.prepare_tokens() so neural models get int IDs."
             )
-
+        # Start process cpu measurement window
+        get_proc_cpu_percent(prime=True)
         self.train_ids = np.asarray(self.train_ids, dtype=np.int64).ravel().tolist()
         if self.val_ids is not None:
             self.val_ids = np.asarray(self.val_ids, dtype=np.int64).ravel().tolist()
@@ -288,12 +292,12 @@ class NeuralEmbedTrainer:
             try:
                 model = self._load_state(filename="best_model.pkl", final=True)
                 print(
-                    f"{Colors.OKGREEN}[OK]{Colors.ENDC} --- Loaded final saved model ---"
+                    f"{Colors.OKGREEN}[OK]{Colors.ENDC} Loading .pkl from final saved model."
                 )
-                return model
+                return model  # Not return model so it keeps going with resume training
             except FileNotFoundError:
                 print(
-                    f"{Colors.WARNING}[WARN]{Colors.ENDC} --- No final model found, training from scratch ---"
+                    f"{Colors.WARNING}[WARN]{Colors.ENDC} No final model found, training from scratch."
                 )
 
         # Model init (use vocab from mapping)
@@ -328,7 +332,12 @@ class NeuralEmbedTrainer:
                 losses.append(loss)
 
                 if step % self.print_every == 0:
-                    print(f"Epoch {epoch + 1}/{epochs}, Step {step}, Loss: {loss:.4f}")
+                    ram_mb, _ = get_proc_mem_mb()
+                    cpu_p = get_proc_cpu_percent()
+                    print(
+                        f"[train] Epoch {epoch + 1}/{epochs} | Step {step} | Loss: {loss:.4f} | RAM: {ram_mb:.2f}mb ({ram_mb / 1024:.2f}Gb) | CPU: {cpu_p:.1f}%"
+                    )
+                    get_proc_cpu_percent(prime=True)
                 step += 1
 
             # Validation + checkpoint
@@ -338,6 +347,12 @@ class NeuralEmbedTrainer:
                 val_loss, _ = self.model.cross_entropy_loss(val_logits, y_val)
                 val_losses.append(val_loss)
                 val_per_epoch.append(float(np.exp(val_loss)))
+                cpu_p = get_proc_cpu_percent()
+                ram_mb, _ = get_proc_mem_mb()
+                print(
+                    f"[valid] Epoch {epoch + 1}/{epochs} | Step {step} | RAM: {ram_mb:.2f}mb ({ram_mb / 1024:.2f}Gb) | CPU: {cpu_p:.1f}%"
+                )
+                get_proc_cpu_percent(prime=True)
 
                 ckpt_name = f"epoch{epoch + 1}_val{val_loss:.4f}.pkl"
                 self._save_state(subdir="checkpoints", filename=ckpt_name, final=False)

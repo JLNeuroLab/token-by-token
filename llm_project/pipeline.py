@@ -45,15 +45,13 @@ NGRAM_NAMES = {
     "ngram_classic",
 }
 NEURAL_SLOW_NAMES = {
+    "neural_numpy",
     "neural_slow",
-    "neuralslow",
-    "neuraln",
     "neural_cpu",
 }
 NEURAL_FAST_NAMES = {
-    "neuralfast",
+    "neural_torch",
     "neural_fast",
-    "neuralt",
     "neural_gpu",
 }
 GPT_NAMES = {
@@ -71,7 +69,9 @@ class LM_Pipeline:
         self.config = config
         self.tokenizer = tokenizer
         self.device = self.config.device
-        print(f"[INFO] Using device: {self.device}")
+        print(
+            f"{Colors.OKBLUE}[INFO]{Colors.ENDC}{Colors.HEADER} Using device: {str(self.device).upper()}{Colors.ENDC}"
+        )
         self.model = None
         self.trainer = None
         self.project_root = project_root or get_project_root()
@@ -150,6 +150,7 @@ class LM_Pipeline:
             final=final_flag,
         )
         save_path = tokenizer_dir / tokenizer_filename
+        # -----------------------------------------------------------------------
 
         # CASE 2: training is not forced and saved tokenizer available
         if not force_retrain and os.path.exists(save_path):
@@ -208,6 +209,7 @@ class LM_Pipeline:
         # Limit the training text before BPE to save time
         if train_limit:
             train_text = train_text[:train_limit]
+        # -----------------------------------------------------------------------
 
         # CASE 3: Train a new tokenizer
         print(f"{Colors.OKCYAN}[TOKENIZER]{Colors.ENDC} Training new BPE tokenizer...")
@@ -223,23 +225,9 @@ class LM_Pipeline:
             setattr(self.tokenizer, "k", int(max_k))
         except Exception:
             pass
-        # -----------------------------------------------------------------------
 
         # Fix UNK part
-        # ----- Build vocab mapping ONLY for neural trainers (identity over BPE ids) -----
-        mt = (self.model_type or "").lower()
-        # if mt in NEURAL_ALL:
-        #     # tokens are already BPE integer ids; keep order, remove dups
-        #     unique_ids = list(dict.fromkeys(tokens))
-        #     self.vocab_tokens = unique_ids
-        #     # identity mapping: id -> id
-        #     self.token_to_id = {tid: tid for tid in unique_ids}
-        #     self.id2token = {tid: tid for tid in unique_ids}
-        #     # neuraln expects an unk_id; BPE shouldn’t produce UNK, use harmless default
-        #     # FROM MERGE added self. to the unk
-        #     self.unk_id = (
-        #         0 if getattr(self, "unk_id", None) is None else int(self.unk_id)
-        #     )
+        # Build vocab mapping ONLY for neural trainers (identity over BPE ids)
         if mt in NEURAL_ALL:
             sample = tokens[0] if tokens else None
             if isinstance(sample, int):
@@ -267,7 +255,7 @@ class LM_Pipeline:
                 #     final=final_flag,
                 # ) not used for now anymore
                 save_model(
-                    {"vocab_tokens": unique_ids},
+                    {"vocab_tokens": list(self.token_to_id.keys())},
                     root=self.project_root,
                     category="tokenizers",
                     subdir=self.subdir,
@@ -275,8 +263,6 @@ class LM_Pipeline:
                 )
             except Exception as e:
                 print(f"{Colors.WARNING}[WARN]{Colors.ENDC} Skipped saving vocab: {e}")
-
-        # ----- end neural-only vocab block -----
         # Fix UNK part, end of block.
 
         plot_path = tokenizer_dir / f"vocabulary_growth_k{max_k}.png"
@@ -766,54 +752,47 @@ class LM_Pipeline:
         ##########################
         # CLASSICAL N-GRAM MODEL #
         ##########################
-        # --- Optional: load pretrained for N-gram only (as in your code) ---
-        if from_pretrained:
-            if self.model_type.lower() in NGRAM_NAMES:
-                model_fname = (
-                    f"ngram_model_n{self.config.n}_k{self.tokenizer.max_k}.pkl"
+
+        if mt in NGRAM_NAMES:
+            # 1) Try to load a pre-trained n-gram if requested
+            if from_pretrained and self.model is None:
+                k_eff = getattr(
+                    getattr(self, "tokenizer", None), "k", getattr(self, "max_k", None)
                 )
+                model_fname = f"ngram_model_n{self.config.n}_k{k_eff}.pkl"
                 model_folder = get_model_path(
                     self.project_root, category="models", subdir="ngram", final=True
                 )
                 model_path = os.path.join(model_folder, model_fname)
                 if os.path.exists(model_path):
-                    print(f"Loading pre-trained N-gram model from: {model_path}")
-                    trainer = NGramTrainer(
-                        config=self.config,
-                        model=None,
-                        tokens=prompt_tokens,
-                        k=self.config.n,
+                    print(f"[OK] Loading pre-trained N-gram model from: {model_path}")
+                    # When loading, trainer can be created without prompt tokens;
+                    # it needs config and (optionally) corpus tokens if its loader expects them.
+                    loader = NGramTrainer(
+                        config=self.config, model=None, tokens=None, k=self.config.n
                     )
-                    self.model = trainer._load_state(model_path, final=True)
-                else:
-                    print(
-                        f"{Colors.WARNING}[!!!]{Colors.ENDC} No pre-trained N-gram model found in final folder. Using current model."
+                    self.model = loader._load_state(model_path, final=True)
+
+            # 2) If still no model, lazy-build it from the corpus tokens prepared earlier
+            if self.model is None:
+                corpus_tokens = getattr(
+                    getattr(self, "tokenizer", None), "tokens", None
+                )
+                if not corpus_tokens:
+                    raise RuntimeError(
+                        f"{Colors.FAIL}[ERROR]{Colors.ENDC} No corpus tokens for n-gram. "
+                        "Ensure prepare_tokens() ran before generate()."
                     )
-            elif self.model_type.lower() in NEURAL_FAST_NAMES:
-                prompt_ids = [
-                    self.token_to_id[t] for t in prompt_tokens if t in self.token_to_id
-                ]
-                generated_ids, generated_tokens, generated_text = self.model.generate(
-                    prompt_ids,
-                    max_new_tokens=max_length,
-                    block_size=self.config.block_size,
-                    id2token=self.id2token,
-                    top_k=50,
-                    top_p=0.9,
-                    unk_id=self.unk_id,
+                self.trainer = NGramTrainer(
+                    config=self.config,
+                    model=None,
+                    tokens=corpus_tokens,
+                    k=self.config.n,
                 )
-                return generated_text
+                self.trainer.train()
+                self.model = self.trainer.model
 
-            else:
-                raise NotImplementedError(
-                    f"{Colors.FAIL}[ERROR]{Colors.ENDC} No other model ready for pretrained loading"
-                )
-
-        ##########################
-        # CLASSICAL N-GRAM MODEL #
-        ##########################
-
-        if mt in NGRAM_NAMES:
+            # 3) Generate with the prompt tokens
             txt = self.model.generate_text(prompt_tokens, max_length=max_length)
             return self._postprocess_text(txt)
 
@@ -1039,7 +1018,7 @@ class LM_Pipeline:
         #      GPT  MODEL     #
         #######################
         elif mt in GPT_NAMES:
-            # ---- infer k (BPE merges) for checkpoint naming ----
+            # Infer k (BPE merges) for checkpoint naming
             k = getattr(self, "max_k", None)
             if k is None and hasattr(self, "tokenizer"):
                 for attr in ("k", "max_k", "K"):
@@ -1059,7 +1038,7 @@ class LM_Pipeline:
                     f"{Colors.FAIL}[ERROR]{Colors.ENDC} Cannot infer BPE k. Make sure prepare_tokens() ran and set self.max_k."
                 )
 
-            # ---- ensure vocab_size matches training (from tokenizer mapping) ----
+            # Ensure vocab_size matches training (from tokenizer mapping)
             if (
                 hasattr(self, "tokenizer")
                 and hasattr(self.tokenizer, "token_to_id")
@@ -1074,7 +1053,7 @@ class LM_Pipeline:
                     f"{Colors.FAIL}[ERROR]{Colors.ENDC} Tokenizer has no token_to_id/id_to_token. Run a short GPT train once so the vocab can be reconstructed."
                 )
 
-            # ---- lazy-load GPT checkpoint (trainer *requires* a tokens dict) ----
+            # lazy-load GPT checkpoint (trainer *requires* a tokens dict)
             if self.model is None:
                 bs = int(getattr(self.config, "block_size", 64))
                 V = int(self.config.vocab_size)
@@ -1115,6 +1094,55 @@ class LM_Pipeline:
                         "Train first (or pass --force_model), then run --mode generate."
                     )
 
+                # Align vocab_size to checkpoint (peek rows in tok_emb) fix the emb mismatch stuff
+                try:
+                    sd = torch.load(model_path, map_location="cpu")
+                    # unwrap common containers
+                    if isinstance(sd, dict) and "tok_emb.weight" not in sd:
+                        for k in ("model_state_dict", "state_dict", "model"):
+                            if k in sd and isinstance(sd[k], dict):
+                                sd = sd[k]
+                                break
+                    ckpt_vocab = sd["tok_emb.weight"].shape[0]
+
+                    # force conf to ckp
+                    if ckpt_vocab != int(self.config.vocab_size):
+                        print(
+                            f"{Colors.WARNING}[WARNING]{Colors.ENDC} GPT vocab mismatch "
+                            f"(ckpt {ckpt_vocab} vs tokenizer {self.config.vocab_size}). "
+                            f"Rebuilding model with checkpoint vocab."
+                        )
+                        # rebuild trainer/model with the checkpoint vocab size
+                        self.config.vocab_size = int(ckpt_vocab)
+
+                        # reset V to cpk size
+                        V = self.config.vocab_size
+
+                        # ensures trainer sees V tokens
+                        train_seq = list(range(V))
+                        bs = int(getattr(self.config, "block_size", 64))
+                        val_base = list(range(min(V, bs + 1)))
+                        if (V - 1) not in val_base:
+                            val_base.append(V - 1)
+                        if len(val_base) < (bs + 1):
+                            val_base += [0] * ((bs + 1) - len(val_base))
+                        tokens_dict = {"train": train_seq, "validation": val_base}
+
+                        # Keep identity stoi/itos to avoid any re-derive bumps
+                        self.gpt_stoi = {i: i for i in range(V)}
+                        self.gpt_itos = {i: i for i in range(V)}
+
+                        self.trainer = GptTrainer(
+                            config=self.config, tokens=tokens_dict, model=None, k=k
+                        )
+                        model_path = getattr(self.trainer, "model_path", model_path)
+
+                except Exception as e:
+                    print(
+                        f"{Colors.WARNING}[WARNING]{Colors.ENDC} Could not peek checkpoint vocab ({e}). Proceeding with current config."
+                    )
+
+                # Loader part
                 if hasattr(self.trainer, "_load_state"):
                     self.trainer._load_state(model_path)
                     self.model = self.trainer.model
@@ -1139,6 +1167,13 @@ class LM_Pipeline:
             if prompt_tokens and isinstance(prompt_tokens[0], int):
                 # already BPE int-ids
                 prompt_ids = prompt_tokens
+                # cap to block_size
+                bs = int(getattr(self.config, "block_size", 64))
+                if len(prompt_ids) > bs:
+                    prompt_ids = prompt_ids[-bs:]
+                if not prompt_ids:
+                    prompt_ids = [0]
+
                 self.decode_mode = (
                     "bpe" if hasattr(self.tokenizer, "decode") else "local"
                 )
@@ -1157,6 +1192,23 @@ class LM_Pipeline:
                 prompt_ids = [
                     self.gpt_stoi[t] for t in prompt_tokens if t in self.gpt_stoi
                 ]
+                # cap prompt to block_size to avoid oversize context
+                bs = int(getattr(self.config, "block_size", 64))
+                if len(prompt_ids) > bs:
+                    prompt_ids = prompt_ids[-bs:]
+                if not prompt_ids:
+                    prompt_ids = [0]
+
+                # Make sure the ids fit the emb loaded
+                V = int(
+                    getattr(
+                        self.config,
+                        "vocab_size",
+                        len(getattr(self, "gpt_stoi", {})) or 0,
+                    )
+                )
+                if V > 0:
+                    prompt_ids = [i if i < V else 0 for i in prompt_ids]
 
             #  Build generator and sample (always run)
             gen = Generator(
@@ -1222,9 +1274,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run LM pipeline")
     parser.add_argument(
         "--model",
-        default="ngram",
+        default="gpt",
         choices=ALL_MODEL_CHOICES,
-        help="which model to run",
+        help="which model to run (GPT | Neural embeddings | Classic Ngram)",
     )
     parser.add_argument(
         "--mode",
@@ -1245,7 +1297,10 @@ if __name__ == "__main__":
     parser.add_argument("--train_limit", type=int, default=100_000)
     parser.add_argument("--valid_limit", type=int, default=10_000)
     parser.add_argument(
-        "--force_tokenizer", action="store_true", help="retrain BPE even if cached"
+        "--force_tokenizer",
+        "--force_bpe",
+        action="store_true",
+        help="retrain BPE even if cached",
     )
     parser.add_argument(
         "--force_model",
@@ -1364,16 +1419,16 @@ if __name__ == "__main__":
             print(f"\nSample of {Colors.OKCYAN}[{args.model}]{Colors.ENDC}\n")
             print(out)
             n_val = getattr(args, "n", "n/a")
-            print("\n===============================================================")
-            print(f"|| n: {n_val} || merges k: {k} ||")
+            footer = f"|| n: {n_val} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
 
-        elif args.model in NEURAL_ALL or GPT_NAMES:
+        elif args.model in NEURAL_ALL or args.model in GPT_NAMES:
             out = pipe.generate("To be or not to", max_length=70)
             print(f"\nSample of {Colors.OKCYAN}[{args.model}]{Colors.ENDC}\n", out)
-            print("=================================================================")
-            print(
-                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
-            )
+            footer = f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
 
     #################
     # MODE GENERATE #
@@ -1392,15 +1447,16 @@ if __name__ == "__main__":
         )
         print(f"\n=== Generated Text {Colors.OKCYAN}[{args.model}]{Colors.ENDC} ===\n")
         print(out_text)
-        print("\n================================================")
-
         if args.model in NGRAM_NAMES:
             n_val = getattr(args, "n", "n/a")
-            print(f"|| n: {n_val} || merges k: {k} ||")
+            footer = f"|| n: {n_val} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
+
         else:
-            print(
-                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
-            )
+            footer = f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
 
     #################
     # MODE COMPARE  #
@@ -1431,7 +1487,7 @@ if __name__ == "__main__":
         for m in [s.strip() for s in args.compare_models.split(",") if s.strip()]:
             if m not in (NEURAL_SLOW_NAMES | NEURAL_FAST_NAMES):
                 print(
-                    f"{Colors.WARNING}[SKIP]{Colors.ENDC} {m} is not a supported name/model for neural comparator"
+                    f"{Colors.WARNING}[SKIP]{Colors.ENDC} {m} is not a supported name/model for neural comparison"
                 )
                 continue
 
@@ -1454,5 +1510,5 @@ if __name__ == "__main__":
             print(f"\n=== {m} ===\n{out}")
             print("====================================================")
             print(
-                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} ||\n"
+                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||\n"
             )

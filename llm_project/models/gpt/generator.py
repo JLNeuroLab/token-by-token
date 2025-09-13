@@ -123,9 +123,14 @@ class Generator:
         sample_fn = strategy_map[self.mode]
 
         for _ in range(self.max_new_tokens):
-            # Slice context to block size
-            block = generated[-self.model.block_size :]
-            input_array[0, -len(block) :] = block
+            # Slice context to block size (defensive + dtype-safe)
+            bs = int(getattr(self.model, "block_size", 64))
+            block = generated[-bs:] if len(generated) > 0 else [0]
+            # ensure it fits and dtype matches
+            if len(block) > bs:
+                block = block[-bs:]
+            input_array.fill(0)  # clear previous content
+            input_array[0, -len(block) :] = np.asarray(block, dtype=np.int64)
 
             # Tensor fix
             # Build the "bridge" to PyTorch: Convert the NumPy array to a PyTorch tensor.

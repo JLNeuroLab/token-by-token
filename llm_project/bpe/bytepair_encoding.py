@@ -10,17 +10,20 @@ import matplotlib.pyplot as plt
 import time
 import psutil
 import platform
-from llm_project.utils.debugg_utils import Colors
+from llm_project.utils.debugg_utils import Colors, get_proc_mem_mb, get_proc_cpu_percent
 
 
 # For tracking resources during merge steps
+
+
 def print_resource_usage(self, step: int):
     now = time.time()
     step_duration = now - self._last_step_time
     self._last_step_time = now
 
-    ram_used = psutil.virtual_memory().used / 1024**2
-    cpu_p = psutil.cpu_percent()
+    ram_used, _ = get_proc_mem_mb()
+    cpu_p = get_proc_cpu_percent(normalized=True)
+    # cpu_p = get_proc_cpu_percent() / max(psutil.cpu_count(logical=True), 1)
 
     print(
         f"""
@@ -182,18 +185,14 @@ class BPE:
         # Start a timer for training time
         start_time = time.time()
 
+        # Prime 1 for the baseline
+        get_proc_cpu_percent(prime=True)
+
         # Training loop over k
         for step in trange(self.max_k, desc="Training BPE", ncols=100):
             # New track for bpe merges
-            if (step + 1) % 50 == 0 or step == 0:
-                print(f"[BPE] Merge step {step + 1}/{self.max_k}", flush=True)
-                if self.track_resource_fn:
-                    # duration = print_resource_usage(self, step)
-                    duration = self.track_resource_fn(self, step)
-                    self.merge_time_dict[step] = duration
 
-                sys.stdout.flush()
-                frequencies = defaultdict(int)
+            frequencies = defaultdict(int)
 
             # Iteration over all the tokens in the text, we exclude the last one
             for i in range(len(tokens) - 1):
@@ -241,6 +240,17 @@ class BPE:
             # Add the size of the vocabulary to the vocabulary history
             self.vocab_size_history.append(len(get_vocab(tokens)))
             # print(f"step {step}: merged {most_freq} in {new_token}")
+
+            if (step + 1) % 50 == 0 or step == 0:
+                if self.track_resource_fn:
+                    # duration = print_resource_usage(self, step)
+                    duration = self.track_resource_fn(self, step + 1)
+                    self.merge_time_dict[step + 1] = duration
+                print(f"[BPE] Merge step {step + 1}/{self.max_k}", flush=True)
+                sys.stdout.flush()
+
+            # For starting the cpu usage measurment log
+            get_proc_cpu_percent(prime=True)
 
         # Retrieves training time
         total_time = time.time() - start_time

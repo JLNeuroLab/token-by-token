@@ -1,10 +1,11 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+
+# import torch.nn as nn
+# import torch.nn.functional as F
 
 import os
 import matplotlib.pyplot as plt
-from llm_project.utils.debugg_utils import Colors
+from llm_project.utils.debugg_utils import Colors, get_proc_mem_mb
 from llm_project.models.neural_fast.model import NeuralLanguageModel
 from llm_project.utils.file_manager import (
     get_project_root,
@@ -313,12 +314,12 @@ class NeuralTrainer:
                 model = self._load_state(filename="best_model.pkl", final=final)
 
                 print(
-                    f"{Colors.OKGREEN}[OK]{Colors.ENDC}\n--- Loaded final saved model ---"
+                    f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Loading file from saved model."
                 )
                 return model
             except FileNotFoundError:
                 print(
-                    f"{Colors.WARNING}[WARN]{Colors.ENDC} \n--- No final model found, training from scratch ---"
+                    f"\n{Colors.WARNING}[WARN]{Colors.ENDC} No final model found, training from scratch."
                 )
 
         # ---------------- TRAINING LOOP -------------------
@@ -339,12 +340,15 @@ class NeuralTrainer:
                 epoch_loss += loss
 
                 if step % self.print_every == 0:
-                    print(f"Epoch {epoch + 1}/{epochs}, Step {step}, Loss: {loss:.4f}")
+                    ram_mb, _ = get_proc_mem_mb()
+                    print(
+                        f"Epoch {epoch + 1}/{epochs} | Step {step} | Loss: {loss:.4f} | RAM: {ram_mb:.2f}mb ({ram_mb / 1024:.2f}Gb)"
+                    )
                 step += 1
 
             avg_epoch_loss = epoch_loss / n_batches
             train_losses_per_epoch.append(avg_epoch_loss)
-            print(f"Epoch {epoch + 1}/{epochs} - Avg Train Loss: {avg_epoch_loss:.4f}")
+            print(f"Epoch {epoch + 1}/{epochs} | Avg Train Loss: {avg_epoch_loss:.4f}")
 
             # ---------------- VALIDATION -------------------
             if self.valid_ids:
@@ -385,7 +389,7 @@ class NeuralTrainer:
                         subdir="final", filename="best_model.pkl", final=final
                     )
                     print(
-                        f"{Colors.OKGREEN}[OK]{Colors.ENDC} Best model updated at epoch {epoch + 1}"
+                        f"{Colors.OKGREEN}[CHECK]{Colors.ENDC} Best model updated at epoch {epoch + 1}"
                     )
                     patience_counter = 0
                 else:
@@ -395,7 +399,7 @@ class NeuralTrainer:
                 # ---------------- EARLY STOPPING ----------------
                 if patience_counter >= patience:
                     print(
-                        f"{Colors.WARNING}[WARN]{Colors.ENDC} Early stopping triggered at epoch {epoch + 1}"
+                        f"{Colors.WARNING}[!!!]{Colors.ENDC} Early stopping triggered at epoch {epoch + 1}"
                     )
                     break
 
