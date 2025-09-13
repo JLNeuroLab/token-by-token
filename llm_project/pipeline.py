@@ -1419,16 +1419,16 @@ if __name__ == "__main__":
             print(f"\nSample of {Colors.OKCYAN}[{args.model}]{Colors.ENDC}\n")
             print(out)
             n_val = getattr(args, "n", "n/a")
-            print("\n===============================================================")
-            print(f"|| n: {n_val} || merges k: {k} ||")
+            footer = f"|| n: {n_val} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
 
         elif args.model in NEURAL_ALL or args.model in GPT_NAMES:
             out = pipe.generate("To be or not to", max_length=70)
             print(f"\nSample of {Colors.OKCYAN}[{args.model}]{Colors.ENDC}\n", out)
-            print("=================================================================")
-            print(
-                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
-            )
+            footer = f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
 
     #################
     # MODE GENERATE #
@@ -1447,15 +1447,16 @@ if __name__ == "__main__":
         )
         print(f"\n=== Generated Text {Colors.OKCYAN}[{args.model}]{Colors.ENDC} ===\n")
         print(out_text)
-        print("\n================================================")
-
         if args.model in NGRAM_NAMES:
             n_val = getattr(args, "n", "n/a")
-            print(f"|| n: {n_val} || merges k: {k} ||")
+            footer = f"|| n: {n_val} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
+
         else:
-            print(
-                f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
-            )
+            footer = f"|| temperature: {args.temperature} || top k: {args.top_k} || top p: {args.top_p} || block_size: {args.block_size} || merges k: {k} ||"
+            pre_footer = len(footer) * "=" + "\n"
+            print(pre_footer, footer)
 
     #################
     # MODE COMPARE  #
@@ -1486,7 +1487,7 @@ if __name__ == "__main__":
         for m in [s.strip() for s in args.compare_models.split(",") if s.strip()]:
             if m not in (NEURAL_SLOW_NAMES | NEURAL_FAST_NAMES):
                 print(
-                    f"{Colors.WARNING}[SKIP]{Colors.ENDC} {m} is not a supported name/model for neural comparator"
+                    f"{Colors.WARNING}[SKIP]{Colors.ENDC} {m} is not a supported name/model for neural comparison"
                 )
                 continue
 

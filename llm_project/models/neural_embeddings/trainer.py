@@ -263,11 +263,11 @@ class NeuralEmbedTrainer:
         # Must have vocab + ids from pipeline
         if not (self.token2id and self.id2token and self.unk_id is not None):
             raise RuntimeError(
-                "Vocabulary mapping not set. Call set_vocab(...) from the pipeline before training."
+                f"{Colors.WARNING}[WARNING]{Colors.ENDC}Vocabulary mapping not set. Call set_vocab(...) from the pipeline before training."
             )
         if not self.train_ids:
             raise RuntimeError(
-                "train_ids not set. Pipeline must provide integer id sequences."
+                f"{Colors.WARNING}[WARNING]{Colors.ENDC} train_ids not set. Pipeline must provide integer id sequences."
             )
 
         epochs = epochs or self.epochs
@@ -292,12 +292,12 @@ class NeuralEmbedTrainer:
             try:
                 model = self._load_state(filename="best_model.pkl", final=True)
                 print(
-                    f"{Colors.OKGREEN}[OK]{Colors.ENDC} --- Loaded final saved model ---"
+                    f"{Colors.OKGREEN}[OK]{Colors.ENDC} Loading .pkl from final saved model."
                 )
-                return model
+                return model  # Not return model so it keeps going with resume training
             except FileNotFoundError:
                 print(
-                    f"{Colors.WARNING}[WARN]{Colors.ENDC} --- No final model found, training from scratch ---"
+                    f"{Colors.WARNING}[WARN]{Colors.ENDC} No final model found, training from scratch."
                 )
 
         # Model init (use vocab from mapping)

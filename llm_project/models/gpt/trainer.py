@@ -82,7 +82,6 @@ def set_seed(seed: int = 1717):
 #
 #
 # class _CompatGptConfig:
-#     """Local flexible config that accepts any kwargs and fills defaults."""
 #
 #     def __init__(self, **kwargs):
 #         # Core model hyperparams
@@ -101,17 +100,6 @@ def set_seed(seed: int = 1717):
 #         self.device = kwargs.pop("device", "cpu")
 #         for k, v in kwargs.items():
 #             setattr(self, k, v)
-
-# Bind the name "GptConfig" to a kwargs-accepting class
-# if _ExternalGptConfig is not None:
-#     try:
-#         _ExternalGptConfig(vocab_size=1)  # probe kwargs support
-#         GptConfig = _ExternalGptConfig
-#     except TypeError:
-#         GptConfig = _CompatGptConfig
-# else:
-#     GptConfig = _CompatGptConfig
-#
 
 
 class GptTrainer:
@@ -268,7 +256,7 @@ class GptTrainer:
         max_start = len(data) - (self.block_size + 1)
         if max_start <= 0:
             raise RuntimeError(
-                f"Not enough tokens for block_size={self.block_size} in split={split} (len={len(data)})"
+                f"{Colors.FAIL}[ERROR]{Colors.ENDC} Not enough tokens for block_size={self.block_size} in split={split} (len={len(data)})"
             )
         ix = torch.randint(0, max_start, (self.batch_size,))
         x = torch.stack([data[i : i + self.block_size] for i in ix])
@@ -298,7 +286,7 @@ class GptTrainer:
 
         if self.tokens is None:
             raise ValueError(
-                "Tokens must be provided externally; tokenizer is decoupled."
+                f"{Colors.FAIL}[ERROR]{Colors.ENDC}Tokens must be provided externally; tokenizer is decoupled."
             )
 
         # trim tokens for quick runs
@@ -307,12 +295,12 @@ class GptTrainer:
         if valid_limit:
             self.val_ids = self.val_ids[:valid_limit]
 
-        if (not force_retrain) and os.path.exists(self.model_path):
-            print("--- Loading pre-trained GPT ---")
-            self._load_state(self.model_path)
-            return self.model
+        # if (not force_retrain) and os.path.exists(self.model_path):
+        #     print("Loading pre-trained GPT")
+        #     self._load_state(self.model_path)
+        #     return self.model
 
-        print("--- Training GPT model ---")
+        print(f"{Colors.OKCYAN}[INFO]{Colors.ENDC} Training GPT model")
         model = self.model
         opt = torch.optim.AdamW(
             model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
@@ -376,7 +364,7 @@ class GptTrainer:
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {self.model_path}")
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(
-                f"{Colors.FAIL}[FAIL]{Colors.ENDC}Model not found at {self.model_path}"
+                f"{Colors.FAIL}[FAIL]{Colors.ENDC} Model not found at {self.model_path}"
             )
 
         # plot and return model
@@ -588,195 +576,3 @@ if __name__ == "__main__":
         print(
             f"{Colors.WARNING}[!!!]{Colors.ENDC} Skipping test perplexity (test set too short for block_size={cfg.block_size})."
         )
-
-
-#     config = GPTConfig(vocab_size, BLOCK_SIZE)
-#     model = GPT(config).to(device)
-#
-#     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
-#     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
-#
-#     train_losses, val_losses = [], []
-#     eval_steps = []
-#
-#     best_val = float("inf")
-#     best_path = os.path.join("saved_models", "gpt_shakespeare-best.pth")
-#     os.makedirs("saved_models", exist_ok=True)
-#
-#     @torch.no_grad()
-#     def _estimate_loss(self, split="val", iters=100):
-#         out = {}
-#         model.eval()
-#         for split in ["train", "val"]:
-#             losses = torch.zeros(EVAL_ITERS)
-#             for k in range(EVAL_ITERS):
-#                 X, Y = get_batch(split)
-#                 with torch.cuda.amp.autocast(enabled=use_amp):
-#                     logits = model(X)
-#                     loss = F.cross_entropy(
-#                         logits.view(-1, logits.size(-1)), Y.view(-1))
-#                 losses[k] = loss.item()
-#             out[split] = losses.mean()
-#         model.train()
-#         return out
-#
-#     print("Starting training...")
-#     tokens_seen = 0
-#     ram_log = []
-#     for iter_num in range(MAX_ITERS):
-#         if iter_num % EVAL_INTERVAL == 0 or iter_num == MAX_ITERS - 1:
-#             losses = estimate_loss()
-#             print(
-#                 f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}",
-#                 flush=True,
-#             )
-#             train_losses.append(losses["train"])
-#             val_losses.append(losses["val"])
-#             eval_steps.append(iter_num)
-#
-#             # Save best Val Loss
-#             cur_val = float(losses["val"])
-#             if cur_val < best_val:
-#                 best_val = cur_val
-#                 torch.save(model.state_dict(), best_path)
-#                 print(
-#                     f"[checkpoint] new best val loss {best_val:.4f} saved -> {best_path}"
-#                 )
-#
-#             # Progress/coverage
-#             epoch_equiv = tokens_seen / max(1, DATASET_TOKENS)
-#             cov = coverage.float().mean().item() * 100.0
-#             print(
-#                 f"[progress] ~epochs={epoch_equiv:.2f}  coverage≈{cov:.1f}%  "
-#                 f"steps/epoch≈{EST_STEPS_PER_EPOCH}"
-#             )
-#
-#         xb, yb = get_batch("train")
-#         with torch.cuda.amp.autocast(enabled=use_amp):
-#             logits = model(xb)
-#             loss = F.cross_entropy(
-#                 logits.view(-1, logits.size(-1)), yb.view(-1))
-#
-#         optimizer.zero_grad(set_to_none=True)
-#         scaler.scale(loss).backward()
-#         scaler.step(optimizer)
-#         scaler.update()
-#         tokens_seen += TOKENS_PER_ITER
-#
-#         if iter_num > 0 and iter_num % log_interval == 0:
-#             ram = psutil.virtual_memory().used / 1024**2
-#             ram_log.append(ram)
-#             print_resource_usage_compat(step=iter_num)
-#
-#     print("Training finished.")
-#
-#     # RAM plot
-#     plt.plot(ram_log, label="RAM Usage (MB)")
-#     plt.title("RAM Usage over Training")
-#     plt.xlabel("Logged Steps")
-#     plt.ylabel("RAM (MB)")
-#     plt.grid(True)
-#     plt.legend()
-#     os.makedirs(os.path.join("experiments", "saved_models"), exist_ok=True)
-#     plt.savefig(os.path.join("experiments", "saved_models", "ram_usage.png"))
-#     plt.close()
-#
-#     # Save the Model
-#     save_path = os.path.join("saved_models")
-#     os.makedirs(save_path, exist_ok=True)
-#
-#     debug_suffix = "-debug" if os.getenv("TTB_DEBUG") == "1" else ""
-#     model_save_path = os.path.join(
-#         save_path, f"gpt_shakespeare{debug_suffix}.pth")
-#     print(f"Saving model to {model_save_path}")
-#     torch.save(model.state_dict(), model_save_path)
-#
-#     # Generation Preview
-#     start_text = "ROMEO:"
-#     context_ids = tokenizer.encode(start_text)
-#     generator = Generator(
-#         model=model,
-#         tokenizer=tokenizer,
-#         max_new_tokens=100,
-#         temperature=0.9,
-#         top_k=40,
-#         eos_token_id=None,
-#         mode="top_k",
-#     )
-#     output_ids = generator.generate(context_ids)
-#     generated_text = tokenizer.decode(output_ids)
-#
-#     print("\n=== Generation Preview ===")
-#     print(generated_text)
-#     self.plot_val_perplexity(steps, val_curve)
-
-#
-#     preview_path = os.path.join("experiments", "plots", "gpt")
-#     os.makedirs(preview_path, exist_ok=True)
-#     with open(
-#         os.path.join(preview_path, "generation_preview.txt"), "w", encoding="utf-8"
-#     ) as f:
-#         f.write(generated_text)
-#
-#     # Plots
-#
-#     # Create folder for plots
-#     plot_folder = os.path.join("experiments", "plots", "gpt")
-#     os.makedirs(plot_folder, exist_ok=True)
-#
-#     # Safety: lengths must match
-#     assert len(eval_steps) == len(train_losses) == len(val_losses), (
-#         f"Lengths mismatch: steps={len(eval_steps)} "
-#         f"train={len(train_losses)} val={len(val_losses)}"
-#     )
-#
-#     # 1) Loss curves
-#     plt.figure(figsize=(8, 6))
-#     plt.plot(
-#         eval_steps, [float(t) for t in train_losses], label="Train Loss", marker="o"
-#     )
-#     plt.plot(eval_steps, [float(v)
-#              for v in val_losses], label="Val Loss", marker="s")
-#     plt.title("Train and Validation Loss per Interval")
-#     plt.xlabel("Iterations")
-#     plt.ylabel("Loss")
-#     plt.grid(True, linestyle="--", alpha=0.6)
-#     plt.legend()
-#     plt.tight_layout()
-#     plt.savefig(os.path.join(plot_folder, "loss_curve.png"))
-#     plt.close()
-#
-#     # 2) Perplexity
-#     # CHANGE: avoid wrapping tensors inside torch.tensor(...) (causes warning)
-#
-#     def _to_float(x):  # ADD: works for both torch.Tensor and float
-#         return x.item() if hasattr(x, "item") else float(x)
-#
-#     val_perplexities = [math.exp(_to_float(vl)) for vl in val_losses]  # CHANGE
-#     plt.figure(figsize=(8, 6))
-#     plt.plot(
-#         eval_steps, val_perplexities, label="Validation Perplexity", marker="^"
-#     )  # keep eval_steps on x
-#     plt.title("Validation Perplexity per Interval")
-#     plt.xlabel("Iterations")
-#     plt.ylabel("Perplexity")
-#     plt.grid(True, linestyle="--", alpha=0.6)
-#     plt.legend()
-#     plt.tight_layout()
-#     plt.savefig(os.path.join(plot_folder, "val_perplexity.png"))
-#     plt.close()
-#
-#
-# if __name__ == "__main__":
-#     os.environ.setdefault("TTB_DEBUG", "1")
-#     set_seed(3108)
-#
-#     main(
-#         max_iters=200,
-#         embd_dim=128,
-#         n_layer=2,
-#         dropout=0.2,
-#         max_k=1000,
-#         device="cuda",
-#         force_retrain=False,  # keep False so you reuse cached BPE
-#     )

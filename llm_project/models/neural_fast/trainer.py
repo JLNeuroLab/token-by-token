@@ -314,12 +314,12 @@ class NeuralTrainer:
                 model = self._load_state(filename="best_model.pkl", final=final)
 
                 print(
-                    f"{Colors.OKGREEN}[OK]{Colors.ENDC}\n--- Loaded final saved model ---"
+                    f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Loading file from saved model."
                 )
                 return model
             except FileNotFoundError:
                 print(
-                    f"{Colors.WARNING}[WARN]{Colors.ENDC} \n--- No final model found, training from scratch ---"
+                    f"\n{Colors.WARNING}[WARN]{Colors.ENDC} No final model found, training from scratch."
                 )
 
         # ---------------- TRAINING LOOP -------------------
@@ -348,7 +348,7 @@ class NeuralTrainer:
 
             avg_epoch_loss = epoch_loss / n_batches
             train_losses_per_epoch.append(avg_epoch_loss)
-            print(f"Epoch {epoch + 1}/{epochs} - Avg Train Loss: {avg_epoch_loss:.4f}")
+            print(f"Epoch {epoch + 1}/{epochs} | Avg Train Loss: {avg_epoch_loss:.4f}")
 
             # ---------------- VALIDATION -------------------
             if self.valid_ids:
@@ -389,7 +389,7 @@ class NeuralTrainer:
                         subdir="final", filename="best_model.pkl", final=final
                     )
                     print(
-                        f"{Colors.OKGREEN}[OK]{Colors.ENDC} Best model updated at epoch {epoch + 1}"
+                        f"{Colors.OKGREEN}[CHECK]{Colors.ENDC} Best model updated at epoch {epoch + 1}"
                     )
                     patience_counter = 0
                 else:
@@ -399,7 +399,7 @@ class NeuralTrainer:
                 # ---------------- EARLY STOPPING ----------------
                 if patience_counter >= patience:
                     print(
-                        f"{Colors.WARNING}[WARN]{Colors.ENDC} Early stopping triggered at epoch {epoch + 1}"
+                        f"{Colors.WARNING}[!!!]{Colors.ENDC} Early stopping triggered at epoch {epoch + 1}"
                     )
                     break
 
