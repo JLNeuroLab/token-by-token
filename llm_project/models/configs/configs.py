@@ -129,6 +129,7 @@ class NeuralConfig(BaseConfig):
         self.vocab_size = vocab_size
         self.embd_dim = embd_dim
         self.block_size = block_size
+        self.device = "cpu"
 
     def display(self):
         print("Neural n-gram configuration")
