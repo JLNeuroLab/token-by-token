@@ -59,7 +59,7 @@ except Exception:
 
 def _pipeline_run(argv: list[str], echo: bool = True) -> int:
     """Runs: python -m llm_project.pipeline <argv...> (stream output)."""
-    cmd = [sys.executable, "-m", "llm_project.pipeline"] + argv
+    cmd = [sys.executable, "-m", "llm_project.pipeline"] + [str(x) for x in argv]
     if echo:
         print(
             f"{Colors.WARNING}Token console > {Colors.ENDC}",
