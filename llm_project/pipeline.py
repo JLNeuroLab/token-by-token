@@ -47,12 +47,12 @@ NGRAM_NAMES = {
 NEURAL_SLOW_NAMES = {
     "neural_numpy",
     "neural_slow",
-    "neural_cpu",
+    "neuralslow",
 }
 NEURAL_FAST_NAMES = {
     "neural_torch",
     "neural_fast",
-    "neural_gpu",
+    "neuralfast",
 }
 GPT_NAMES = {
     "gpt",
