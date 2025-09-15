@@ -278,6 +278,9 @@ def assisted_wizard() -> str:
             force_model = choose("force_model?", ["y", "n"], "y")
             if force_model in (_BACK, _EXIT):
                 return "back" if force_model == _BACK else "exit"
+            force_tokenizer = choose("force_model?", ["y", "n"], "y")
+            if force_tokenizer in (_BACK, _EXIT):
+                return "back" if force_tokenizer == _BACK else "exit"
             argv += [
                 "--n",
                 str(n),
@@ -288,6 +291,9 @@ def assisted_wizard() -> str:
             ]
             if force_model == "y":
                 argv += ["--force_model"]
+            elif force_tokenizer == "y":
+                argv += ["--force_tokenizer"]
+
 
         elif model in ("neural_slow", "neural_fast"):
             epochs = choose_int("epochs", 2)
@@ -308,6 +314,9 @@ def assisted_wizard() -> str:
             force_model = choose("force_model? (y/n)", ["y", "n"], "y")
             if force_model in (_BACK, _EXIT):
                 return "back" if force_model == _BACK else "exit"
+            force_tokenizer = choose("force_model?", ["y", "n"], "y")
+            if force_tokenizer in (_BACK, _EXIT):
+                return "back" if force_tokenizer == _BACK else "exit"
             argv += [
                 "--epochs",
                 str(epochs),
@@ -322,6 +331,8 @@ def assisted_wizard() -> str:
             ]
             if force_model == "y":
                 argv += ["--force_model"]
+            elif force_tokenizer == "y":
+                argv += ["--force_tokenizer"]
 
         elif model == "gpt":
             epochs = choose_int("epochs", 2)
@@ -342,6 +353,9 @@ def assisted_wizard() -> str:
             force_model = choose("force_model? (y/n)", ["y", "n"], "y")
             if force_model in (_BACK, _EXIT):
                 return "back" if force_model == _BACK else "exit"
+            force_tokenizer = choose("force_model?", ["y", "n"], "y")
+            if force_tokenizer in (_BACK, _EXIT):
+                return "back" if force_tokenizer == _BACK else "exit"
             argv += [
                 "--epochs",
                 str(epochs),
@@ -356,6 +370,9 @@ def assisted_wizard() -> str:
             ]
             if force_model == "y":
                 argv += ["--force_model"]
+            elif force_tokenizer == "y":
+                argv += ["--force_tokenizer"]
+
         
     elif mode == "compare":
         models = (
