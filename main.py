@@ -278,7 +278,7 @@ def assisted_wizard() -> str:
             force_model = choose("force_model?", ["y", "n"], "y")
             if force_model in (_BACK, _EXIT):
                 return "back" if force_model == _BACK else "exit"
-            force_tokenizer = choose("force_model?", ["y", "n"], "y")
+            force_tokenizer = choose("force_tokenizer?", ["y", "n"], "y")
             if force_tokenizer in (_BACK, _EXIT):
                 return "back" if force_tokenizer == _BACK else "exit"
             argv += [
@@ -314,7 +314,7 @@ def assisted_wizard() -> str:
             force_model = choose("force_model? (y/n)", ["y", "n"], "y")
             if force_model in (_BACK, _EXIT):
                 return "back" if force_model == _BACK else "exit"
-            force_tokenizer = choose("force_model?", ["y", "n"], "y")
+            force_tokenizer = choose("force_tokenizer?", ["y", "n"], "y")
             if force_tokenizer in (_BACK, _EXIT):
                 return "back" if force_tokenizer == _BACK else "exit"
             argv += [
@@ -353,7 +353,7 @@ def assisted_wizard() -> str:
             force_model = choose("force_model? (y/n)", ["y", "n"], "y")
             if force_model in (_BACK, _EXIT):
                 return "back" if force_model == _BACK else "exit"
-            force_tokenizer = choose("force_model?", ["y", "n"], "y")
+            force_tokenizer = choose("force_tokenizer?", ["y", "n"], "y")
             if force_tokenizer in (_BACK, _EXIT):
                 return "back" if force_tokenizer == _BACK else "exit"
             argv += [

@@ -146,7 +146,7 @@ class GptTrainer:
         self.coverage = torch.zeros(self.train_range, dtype=torch.bool)
 
         # build/save paths like N-gram does (under experiments/saved_models/gpt/)
-        self.model_folder = get_model_path(self.root, "saved_models", subdir="gpt")
+        self.model_folder = get_model_path(self.root, "models", subdir="gpt")
         os.makedirs(self.model_folder, exist_ok=True)
         # filename embeds k (like ngram) + key arch bits + n_layer
         ed = int(getattr(config, "embd_dim", 384))

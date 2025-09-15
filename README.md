@@ -164,7 +164,7 @@ The **classic n-gram model** serves as a baseline. It predicts the next token ba
 
 **Results:**
 
-Best Lambdas: [0.1, 0.6, 0.3] with Perplexity: 451.3941
+- Best Lambdas: [0.1, 0.6, 0.3] with Perplexity: 451.3941
 
 **Plots:**
 
@@ -216,7 +216,7 @@ The **neural n-embedding model** extends the classic n-gram by learning embeddin
 
 **Results:**
 
-- Perplexity (validation set): TBD  
+- Perplexity (validation set): 62.4458
 - Observations: Produces more coherent sequences compared to the classic n-gram; captures some stylistic features of Shakespeare.
 
 **Plots:**
@@ -239,7 +239,7 @@ The **GPT-based model** leverages transformers and causal self-attention to mode
 
 **Results:**
 
-- Perplexity (validation set): TBD  
+- Perplexity (validation set): 14.53
 - Observations: Best performance overall; generates fluent, stylistically faithful text resembling Shakespeare.
 ---
 #### GPT Experiments – Selected Models
