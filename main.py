@@ -56,10 +56,19 @@ try:
 except Exception:
     raise RuntimeError("LM_Pipeline or constants not found")
 
+def _flatten(argv):
+    result = []
+    for x in argv:
+        if isinstance(x, list):
+            result.extend(_flatten(x))
+        else:
+            result.append(str(x))
+    return result
 
 def _pipeline_run(argv: list[str], echo: bool = True) -> int:
     """Runs: python -m llm_project.pipeline <argv...> (stream output)."""
-    cmd = [sys.executable, "-m", "llm_project.pipeline"] + [str(x) for x in argv]
+    flat_argv = _flatten(argv)
+    cmd = [sys.executable, "-m", "llm_project.pipeline"] + flat_argv
     if echo:
         print(
             f"{Colors.WARNING}Token console > {Colors.ENDC}",
@@ -266,7 +275,7 @@ def assisted_wizard() -> str:
             valid_limit = choose_int("valid_limit", 10_000)
             if valid_limit in (_BACK, _EXIT):
                 return "back" if valid_limit == _BACK else "exit"
-            force_model = choose("force_model? (y/n)", ["y", "n"], "y")
+            force_model = choose("force_model?", ["y", "n"], "y")
             if force_model in (_BACK, _EXIT):
                 return "back" if force_model == _BACK else "exit"
             argv += [
@@ -315,33 +324,39 @@ def assisted_wizard() -> str:
                 argv += ["--force_model"]
 
         elif model == "gpt":
-            epochs = choose_int("epochs", 1)
+            epochs = choose_int("epochs", 2)
             if epochs in (_BACK, _EXIT):
                 return "back" if epochs == _BACK else "exit"
-            batch = choose_int("batch_size", 32)
+            batch = choose_int("batch_size", 64)
             if batch in (_BACK, _EXIT):
                 return "back" if batch == _BACK else "exit"
-            bs = choose_int("block_size", 64)
+            bs = choose_int("block_size", 8)
             if bs in (_BACK, _EXIT):
                 return "back" if bs == _BACK else "exit"
-            argv += (
-                ["--epochs", str(epochs)],
-                ["--batch_size", str(batch)],
-                ["--block_size", str(bs)],
-            )
-            # fix accidental tuple: flatten
-            argv = sum(
-                (
-                    [a, b]
-                    for a, b in [
-                        ("--epochs", str(epochs)),
-                        ("--batch_size", str(batch)),
-                        ("--block_size", str(bs)),
-                    ]
-                ),
-                argv,
-            )
-
+            train_limit = choose_int("train_limit", 50_000)
+            if train_limit in (_BACK, _EXIT):
+                return "back" if train_limit == _BACK else "exit"
+            valid_limit = choose_int("valid_limit", 10_000)
+            if valid_limit in (_BACK, _EXIT):
+                return "back" if valid_limit == _BACK else "exit"
+            force_model = choose("force_model? (y/n)", ["y", "n"], "y")
+            if force_model in (_BACK, _EXIT):
+                return "back" if force_model == _BACK else "exit"
+            argv += [
+                "--epochs",
+                str(epochs),
+                "--batch_size",
+                str(batch),
+                "--block_size",
+                str(bs),
+                "--train_limit",
+                str(train_limit),
+                "--valid_limit",
+                str(valid_limit),
+            ]
+            if force_model == "y":
+                argv += ["--force_model"]
+        
     elif mode == "compare":
         models = (
             input(
