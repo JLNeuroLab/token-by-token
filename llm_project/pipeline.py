@@ -803,10 +803,16 @@ class LM_Pipeline:
             # ---- lazy-load neural checkpoints if needed ----
             if self.model is None:
                 k = getattr(self, "max_k", getattr(self.tokenizer, "k", None))
+                
                 if mt in NEURAL_FAST_NAMES:
-                    # fast trainer: pass vocab-cover so vocab_size is right
+                    # Fast trainer: ensure vocab matches checkpoint
                     V = len(getattr(self, "token_to_id", {}))
-                    tokens_vocab = list(range(V)) if V else None
+                    V_ckpt = getattr(self.model, "tok_emb", None)
+                    if V_ckpt is not None:
+                        tokens_vocab = list(range(V_ckpt.weight.shape[0]))
+                    else:
+                        tokens_vocab = list(range(V)) if V > 0 else None
+
                     self.trainer = NeuralTrainer(
                         model=None,
                         epochs=getattr(self.config, "epochs", 10),
@@ -829,7 +835,7 @@ class LM_Pipeline:
                         self.trainer.token2id = getattr(self, "token_to_id", None)
                         self.trainer.id2token = getattr(self, "id2token", None)
                 else:
-                    # neural slow
+                    # Neural slow
                     self.trainer = NeuralEmbedTrainer(
                         model=None,
                         epochs=getattr(self.config, "epochs", 3),
@@ -847,112 +853,39 @@ class LM_Pipeline:
                         self.token_to_id, self.id2token, getattr(self, "unk_id", 0)
                     )
 
-                # Try to load the final best model (no need for a path) via API
-                # so we don't need to rely completly on model_path
-                # ----- load checkpoint depending on neural family -----
+                # ---- load checkpoint ----
                 loaded = False
-                if mt in NEURAL_FAST_NAMES:
-                    # FAST variant: keep the original model_path-based loader.
-                    model_path = getattr(self.trainer, "model_path", None)
-                    if not model_path or not os.path.exists(model_path):
-                        cpkt_dir = os.path.join(
-                            self.project_root,
-                            "experiments",
-                            "models",
-                            "neuralfast",
-                            "checkpoints",
-                        )
-                        best = os.path.join(cpkt_dir, "best_model.pkl")
-                        if os.path.exists(best):
-                            model_path = best
-                        else:
-                            import glob
-
-                            candidates = sorted(
-                                glob.glob(os.path.join(cpkt_dir, "*.pkl"))
-                            )
-                            if candidates:
-                                model_path = candidates[-1]  # the last/newest
-                            else:
-                                model_path = None
-
-                    if not model_path or not os.path.exists(model_path):
-                        raise FileNotFoundError(
-                            f"{Colors.FAIL}[ERROR]{Colors.ENDC} No {mt} checkpoint found at: {model_path}. Train {mt} first."
-                        )
-
-                    if hasattr(self.trainer, "_load_state"):
-                        # fast trainer expects full path
-                        self.trainer._load_state(model_path)
-                        self.model = self.trainer.model
+                try:
+                    self.model = self.trainer._load_state(filename=None, final=False)
+                    loaded = True
+                except (FileNotFoundError, AttributeError):
+                    if hasattr(self.trainer, "load"):
+                        self.model = self.trainer.load()
                         loaded = True
-                    elif hasattr(self.trainer, "load"):
-                        self.model = self.trainer.load(model_path)
-                        loaded = True
-                    else:
-                        raise RuntimeError(
-                            "Trainer has no loader method (_load_state/load)."
-                        )
-                else:
-                    # SLOW variant: standard location final/best_model.pkl via the trainer API.
-                    if hasattr(self.trainer, "_load_state"):
-                        try:
-                            # experiments/models/neural_ngrams/final/best_model.pkl
-                            self.model = self.trainer._load_state(
-                                filename="best_model.pkl", final=True
-                            )
-                            loaded = True
-                        except FileNotFoundError:
-                            # Fallback: newest checkpoint under experiments/models/neural_ngrams/checkpoints/
-                            try:
-                                import glob
-
-                                ckpt_dir = os.path.join(
-                                    self.project_root,
-                                    "experiments",
-                                    "models",
-                                    "neuralslow",
-                                    "checkpoints",
-                                )
-                                candidates = sorted(
-                                    glob.glob(os.path.join(ckpt_dir, "*.pkl"))
-                                )
-                                if candidates:
-                                    latest = os.path.basename(candidates[-1])
-                                    self.model = self.trainer._load_state(
-                                        filename=latest, final=False
-                                    )
-                                    loaded = True
-                            except FileNotFoundError:
-                                pass
 
                 if not loaded:
-                    raise FileNotFoundError(
-                        f"{Colors.FAIL}[ERROR]{Colors.ENDC} No {mt} checkpoint found. Train {mt} first."
-                    )
+                    raise FileNotFoundError(f"No {mt} checkpoint found. Train {mt} first.")
 
-            # ---- encode prompt and call correct signature ----
-            prompt_ids = [
-                self.token_to_id[t] for t in prompt_tokens if t in self.token_to_id
-            ]
+            # ---- encode prompt ----
             unk_id = getattr(self, "unk_id", 0)
+            prompt_ids = [self.token_to_id.get(t, unk_id) for t in prompt_tokens]
+            if not prompt_ids:
+                prompt_ids = [unk_id]
+
+            block_size = getattr(self.config, "block_size", getattr(self.model, "n", 8))
+            if len(prompt_ids) > block_size:
+                prompt_ids = prompt_ids[-block_size:]
 
             # sampling knobs
             s = getattr(self, "sampling", {}) or {}
             top_k = int(s.get("top_k", 50))
             top_p = float(s.get("top_p", 0.9))
             temperature = float(s.get("temperature", 0.9))
-            block_size = getattr(self.config, "block_size", getattr(self.model, "n", 8))
 
-            # --- Robust, signature-aware call for neural variants ---
-            # One neural model accepts "stochastic", other accepts "stop_ids",
-            # "start_ids"/"max_new_tokens", or "start"/"max_length". Now inspects the
-            # callable and pass only what it supports to avoid TypeError mismatches.
+            # ---- prepare kwargs for generate() ----
             params = set(inspect.signature(self.model.generate).parameters.keys())
-
             kwargs = {}
 
-            # 1) Start tokens (exact name varies across implementations)
             if "start_ids" in params:
                 kwargs["start_ids"] = prompt_ids
             elif "start" in params:
@@ -960,59 +893,49 @@ class LM_Pipeline:
             elif "input_ids" in params:
                 kwargs["input_ids"] = prompt_ids
 
-            # 2) Length / sampling knobs (only set those the function declares)
             if "max_new_tokens" in params:
                 kwargs["max_new_tokens"] = max_length
             elif "max_length" in params:
                 kwargs["max_length"] = max_length
 
-            if "top_k" in params:
-                kwargs["top_k"] = top_k
-            if "top_p" in params:
-                kwargs["top_p"] = top_p
-            if "temperature" in params:
-                kwargs["temperature"] = temperature
-            if "block_size" in params:
-                kwargs["block_size"] = block_size
-            if "id2token" in params:
-                kwargs["id2token"] = self.id2token
+            if "top_k" in params: kwargs["top_k"] = top_k
+            if "top_p" in params: kwargs["top_p"] = top_p
+            if "temperature" in params: kwargs["temperature"] = temperature
+            if "block_size" in params: kwargs["block_size"] = block_size
+            if "id2token" in params: kwargs["id2token"] = self.id2token
+            if "stochastic" in params: kwargs["stochastic"] = True
+            if "unk_id" in params: kwargs["unk_id"] = unk_id
+            if "stop_ids" in params: kwargs["stop_ids"] = {unk_id}
 
-            # 3) Special controls: stochastic vs explicit stop_ids vs unk handling
-            if "stochastic" in params:
-                kwargs["stochastic"] = True
-            if "unk_id" in params:
-                kwargs["unk_id"] = unk_id
-            if "stop_ids" in params:
-                # IMPORTANT: stop_ids must be an iterable; use a small set containing unk_id
-                kwargs["stop_ids"] = {unk_id}
-
-            # 4) Call with filtered kwargs. If a downstream model still has a quirky positional
-            #    signature, you can add a positional fallback—but in practice this kwargs call
-            #    is enough for both neural_slow and neuralfast you're running.
-            # Primary attempt with filtered kwargs
+            # ---- call generate() safely ----
             try:
-                generated_ids, generated_tokens, generated_text = self.model.generate(
-                    **kwargs
-                )
+                generated_ids, generated_tokens, generated_text = self.model.generate(**kwargs)
             except TypeError:
-                print(
-                    f"{Colors.WARNING}[WARNING]{Colors.ENDC} Generating from the except block"
-                )
-                # Last-resort positional fallback (ensure stop_ids is a list at the tail)
+                print(f"[WARNING] Fallback positional generate()")
                 generated_ids, generated_tokens, generated_text = self.model.generate(
                     prompt_ids,
                     max_length,
-                    top_k
-                    if "stochastic" not in params
-                    else True,  # tolerate odd 3rd arg slots
+                    top_k if "stochastic" not in params else True,
                     top_p,
                     temperature,
                     block_size,
                     self.id2token,
-                    [unk_id],  # iterable, not int
+                    [unk_id]
                 )
+
+            # ---- fix types ----
+            if isinstance(generated_ids, dict):
+                generated_ids = list(generated_ids.get("ids", []))
+            if isinstance(generated_tokens, list) and all(isinstance(t, int) for t in generated_tokens):
+                generated_text = " ".join([self.id2token.get(t, str(t)) for t in generated_tokens])
+            elif isinstance(generated_tokens, list):
+                generated_text = " ".join(generated_tokens)
+            else:
+                generated_text = str(generated_tokens)
+
             generated_text = self._postprocess_text(generated_text)
             return generated_text
+
 
         #######################
         #      GPT  MODEL     #
@@ -1258,6 +1181,7 @@ if __name__ == "__main__":
         from llm_project.models.configs.configs import (
             NgramConfig,
             NeuralConfig,
+            NeuralFastConfig,
             GptConfig,
         )
     except Exception:
@@ -1268,6 +1192,8 @@ if __name__ == "__main__":
         class NeuralConfig(SimpleNamespace):
             pass
 
+        class NeuralFastConfig(SimpleNamespace):
+            pass
         class GptConfig(SimpleNamespace):
             pass
 

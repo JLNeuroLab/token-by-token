@@ -172,6 +172,7 @@ class GptTrainer:
             "state_dict": self.model.state_dict(),
             "meta": {
                 "k": self.k,
+                "learning_rate": self.learning_rate,
                 "embd_dim": getattr(self.config, "embd_dim", None),
                 "layer_dim": getattr(self.config, "layer_dim", None),
                 "n_heads": getattr(self.config, "n_heads", None),

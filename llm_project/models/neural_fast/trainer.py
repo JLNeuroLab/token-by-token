@@ -4,6 +4,7 @@ import torch
 # import torch.nn.functional as F
 
 import os
+import json
 import matplotlib.pyplot as plt
 from llm_project.utils.debugg_utils import Colors, get_proc_mem_mb
 from llm_project.models.neural_fast.model import NeuralLanguageModel
@@ -36,7 +37,7 @@ class NeuralTrainer:
         self.device = self.config.device
         self.model = model
         self.epochs = epochs
-        self.lr = lr
+        self.lr = float(getattr(config, "learning_rate", 3e-4))
         self.max_checkpoints = max_checkpoints
         self.print_every = print_every
         self.patience = patience
@@ -86,6 +87,7 @@ class NeuralTrainer:
             "meta": {
                 "n": getattr(self.model, "n", None),
                 "k": self.max_k,
+                "learning_rate": getattr(self, "lr", None),
                 "batch_size": self.batch_size,
                 "embd_dim": getattr(self.config, "embd_dim", None),
                 "block_size": getattr(self.config, "block_size", None),
@@ -94,14 +96,16 @@ class NeuralTrainer:
                 "val_perplexity": val_perplexity,
                 "val_loss": val_loss
             },
+            "token2id": self.token2id,
+            "id2token": self.id2token,
         }
     
+    # ------------------- SAVE / LOAD -------------------
     def _save_state(self, subdir=None, filename=None, final=None, val_loss=None, val_perplexity=None):
         """
-        Salva lo stato completo del modello, optimizer, vocab e config.
+        Save the full model state, optimizer, and meta to a .pth file, and meta to a separate .json
         """
         final_flag = final if final is not None else getattr(self, "final", False)
-        # Se non viene passato subdir, scegli il percorso corretto
         model_subdir = "neuralfast"
         target_subdir = (
             os.path.join(model_subdir, "checkpoints")
@@ -109,60 +113,87 @@ class NeuralTrainer:
             else os.path.join(model_subdir, "final")
         )
 
-        state = self._state_dict(val_loss=val_loss, val_perplexity=val_perplexity)
-        state.update(
-            {"val_loss": val_loss,
-             "val_perplexity": val_perplexity
-             }
-        )
+        folder_path = get_model_path(self.root, "models", subdir=target_subdir, final=final_flag)
+        os.makedirs(folder_path, exist_ok=True)
 
-        full_path = save_model(
-            state,
-            root=self.root,
-            category="models",
-            subdir=target_subdir,
-            filename=filename,
-            final=final_flag,
-        )
-        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to {full_path}")
-        return full_path
+        # If filename is not provided, create a default one
+        if filename is None:
+            filename = f"epoch_{self.epochs}.pth"
+
+        # Build state to save
+        state = self._state_dict(val_loss=val_loss, val_perplexity=val_perplexity)
+        state.update({
+            "optimizer_state": self.optimizer.state_dict() if hasattr(self, "optimizer") else None,
+        })
+
+        # Save PyTorch checkpoint
+        torch.save(state, os.path.join(folder_path, filename))
+
+        # Save meta information as JSON
+        json_path = os.path.join(folder_path, filename.replace(".pth", ".json"))
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(state["meta"], f, indent=2)
+
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to {os.path.join(folder_path, filename)}")
+        print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Meta saved to {json_path}")
+        return os.path.join(folder_path, filename), json_path
 
     def _load_state(self, filename=None, subdir=None, final=None):
         """
-        Carica lo stato completo del modello, optimizer, vocab e config.
+        Load the full model state and optimizer with safe vocab mismatch handling.
         """
         final_flag = final if final is not None else getattr(self, "final", False)
-        # se subdir non è passato, punta alla cartella giusta
         target_subdir = subdir or ("neuralfast/final" if final_flag else "neuralfast/checkpoints")
-
         folder_path = get_model_path(self.root, "models", subdir=target_subdir, final=final_flag)
 
+        # Select last checkpoint if filename not provided
         if filename is None:
-            # Pick last .pkl file if not specified
-            files = sorted([f for f in os.listdir(folder_path) if f.endswith(".pkl")])
-            if not files:
-                raise FileNotFoundError(f"No checkpoint found in {folder_path}")
-            filename = files[-1]
+            files = sorted([f for f in os.listdir(folder_path) if f.endswith(".pth")])
+            filename = files[0]
 
+        # Load checkpoint
+        state = torch.load(os.path.join(folder_path, filename), map_location="cpu")
 
-        state = load_model(
-            root=self.root,
-            category="models",
-            subdir=target_subdir,
-            filename=filename,
-            final=final_flag,
-        )
+        # Peek vocab size from checkpoint
+        if "token2id" in state:
+            ckpt_vocab_size = len(state["token2id"])
+        elif "id2token" in state:
+            ckpt_vocab_size = len(state["id2token"])
+        else:
+            raise ValueError("[FAIL] Checkpoint missing vocab info (token2id/id2token).")
 
-        self.model = state["model"].to(self.device)
-        self.optimizer = state["optimizer"]
+        # Compare with current config
+        if hasattr(self.config, "vocab_size") and self.config.vocab_size is not None:
+            current_vocab = self.config.vocab_size
+        else:
+            current_vocab = 0
+
+        if ckpt_vocab_size != current_vocab:
+            print(
+                f"{Colors.WARNING}[WARNING]{Colors.ENDC} Neuralfast vocab mismatch "
+                f"(ckpt {ckpt_vocab_size} vs tokenizer {self.config.vocab_size}). "
+                f"Rebuilding model with checkpoint vocab."
+            )
+            self.config.vocab_size = ckpt_vocab_size
+
+        # Build model AFTER setting vocab size
+        self.model = NeuralLanguageModel(config=self.config).to(self.device)
+
+        # Load weights safely (ignore extra/missing keys)
+        self.model.load_state_dict(state["state_dict"], strict=False)
+
+        # Load optimizer if present
+        if "optimizer_state" in state and state["optimizer_state"] is not None:
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+            self.optimizer.load_state_dict(state["optimizer_state"])
+
+        # Update meta
         self.id2token = state.get("id2token", None)
         self.token2id = state.get("token2id", None)
         self.config = state.get("config", self.config)
 
         if self.id2token is None or self.token2id is None:
-            raise ValueError(
-                f"{Colors.FAIL}[FAIL]{Colors.ENDC} Loaded model does not contain vocab!"
-            )
+            raise ValueError("[FAIL] Loaded model does not contain vocab!")
 
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model loaded from {filename}")
         return self.model
@@ -315,7 +346,7 @@ class NeuralTrainer:
             self.model = NeuralLanguageModel(config=self.config).to(self.device)
 
         epochs = self.epochs if None else epochs
-        lr = self.lr if None else lr
+        lr = self.lr
         print(
             f"{Colors.OKBLUE}[INFO]{Colors.ENDC} Training for {epochs} epochs, lr={lr}"
         )
@@ -393,7 +424,7 @@ class NeuralTrainer:
                 )
 
                 # ---------------- SAVE CHECKPOINT ----------------
-                ckpt_name = f"epoch{epoch + 1}_val{val_loss:.4f}.pkl"
+                ckpt_name = f"epoch{epoch + 1}_val{val_loss:.4f}.pth"
                 ckpt_path = self._save_state(
                     subdir="checkpoints", 
                     filename=ckpt_name, 
