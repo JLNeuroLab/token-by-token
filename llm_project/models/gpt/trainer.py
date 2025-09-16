@@ -185,17 +185,24 @@ class GptTrainer:
             },
         }
 
-    def _save_state(self, filename=None, val_loss=None, val_perplexity=None):
+    def _save_state(self, filename=None, val_loss=None, val_perplexity=None, step=None):
         # keep the same interface: save under experiments/saved_models/gpt/<filename>
         filename = filename or self.model_fname
         # save weights as .pth and the meta as .json next to it
         torch.save(self.model.state_dict(), os.path.join(self.model_folder, filename))
-        meta = self._state_dict(val_loss=val_loss, val_perplexity=val_perplexity)["meta"]
-        with open(
-            os.path.join(self.model_folder, filename.replace(".pth", ".json")),
-            "w",
-            encoding="utf-8",
-        ) as f:
+        meta = self._state_dict()["meta"]
+
+        # Add dynamic training info
+        if val_loss is not None:
+            meta["val_loss"] = float(val_loss)
+        if val_perplexity is not None:
+            meta["val_perplexity"] = float(val_perplexity)
+        if step is not None:
+            meta["step"] = int(step)
+
+        # Save meta JSON alongside model weights
+        meta_path = os.path.join(self.model_folder, filename.replace(".pth", ".json"))
+        with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
 
     def _load_state(self, file_path):
@@ -359,15 +366,12 @@ class GptTrainer:
                 val_curve.append(vl)
                 if vl < best_val:
                     best_val = vl
-                    self._save_state(filename=self.model_fname, val_loss=vl, val_perplexity=ppl)
-                    # also write a small meta JSON with latest val
-                    meta = self._state_dict()["meta"]
-                    meta.update({"val_loss": float(vl), "step": int(it)})
-                    with open(
-                        self.model_path.replace(".pth", ".json"), "w", encoding="utf-8"
-                    ) as f:
-                        json.dump(meta, f, indent=2)
-
+                    self._save_state(
+                        filename=self.model_fname,
+                        val_loss=vl,
+                        val_perplexity=ppl,
+                        step=it
+                    )
             # one step
             X, Y = self._get_batch("train")
             with torch.cuda.amp.autocast(enabled=self.use_amp):
@@ -395,7 +399,10 @@ class GptTrainer:
                 ram_log.append(ram_mb)
 
         # final save
-        self._save_state(filename=self.model_fname, val_loss=vl, val_perplexity=ppl)
+        self._save_state(filename=self.model_fname, 
+                         val_loss=vl, 
+                         val_perplexity=ppl,
+                         step=self.max_iters)
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {self.model_path}")
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(
