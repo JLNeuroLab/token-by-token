@@ -464,7 +464,7 @@ class NeuralEmbedTrainer:
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     full_path = self._save_state(
-                        subdir="final", filename="best_model.pkl", final=True
+                        subdir="final", filename="best_model.pkl", final=final
                     )
                     self.model_path = full_path
 

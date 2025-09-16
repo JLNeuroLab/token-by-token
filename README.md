@@ -121,11 +121,11 @@ python -m main.py
 - **neural** → Neural n-gram  
 
 --- 
-### 3.1 Modes: Assisted vs Manual
+### 3.1 Manual Mode
 
 **Manual Mode** – You type full commands. Ideal for experienced users or reproducible experiments.
 ```
-Token console > Console mode (manual / assisted / exit) [manual if blank]: <-
+Token console > Console mode (manual / assisted / exit) [manual if blank]: manual <-
 ```
 **Example usage:**
 ```
@@ -157,7 +157,28 @@ Token console > Console mode (manual / assisted / exit) [manual if blank]: assis
 ```
 ## 4. Model Results and Evaluation
 
-This section presents the quantitative and qualitative results for all three models: Classic n-gram, Neural embeddings, and GPT-based. Each model includes perplexity, loss curves, vocabulary growth, and observations.
+This section presents the quantitative and qualitative results for all three models: Classic n-gram, Neural embeddings, and GPT-based. Each model includes perplexity, loss curves and observations.
+
+---
+
+### 4.0 Byte Pair Encoding (BPE) Overview
+
+We implemented **Byte Pair Encoding (BPE) from scratch**, without relying on any external libraries. BPE works by iteratively merging the most frequent pair of characters or subwords in the dataset to create a compact, efficient subword vocabulary.  
+
+**Implementation Details:**
+- Tokenized the raw Shakespeare dataset into characters initially.
+- Counted frequencies of character pairs and merged the most frequent ones iteratively.
+- Repeated the merge process until reaching the target vocabulary size (*k* merges).
+- Generated subword tokens that balance vocabulary size with the ability to represent rare words efficiently.
+- Output: a subword vocabulary and a mapping from tokens to IDs, used in all downstream models.
+
+**Observations:**
+- A vocabulary size of **k=200** was selected as optimal.
+- This BPE configuration was **used for all subsequent neural and GPT models**.
+- The resulting tokenization improves both training efficiency and text generation quality.
+
+---
+After this preprocessing step, all models were trained using the tokenized data described above. The following sections present results per model.
 
 ---
 ### 4.1 Classic n-gram Model
@@ -169,11 +190,11 @@ The **classic n-gram model** serves as a baseline. It predicts the next token ba
 - The model uses **interpolated n-gram probabilities** to combine different orders of n-grams.  
 - The interpolation weights (λ) were **tuned to achieve the best validation perplexity**, improving the model's predictive performance.  
 
-**Parameters**
+**Hyperparameters**
 - Best Lambdas: [0.1, 0.6, 0.3]
 
 **Results:**
-- Perplexity: 451.3941
+- Perplexity: **451.3941**
 
 **Plots:**
 
@@ -209,18 +230,26 @@ To evaluate the impact of BPE vocabulary size, we trained the n-gram model with 
 ![Example of text generation](docs/ngram/ngram_generatedtxt.png)
 
 ---
-### 4.2 Neural Embedding Model
 
-The **neural n-embedding model** extends the classic n-gram by learning embeddings for tokens, allowing better generalization over longer contexts.  
+### 4.2 Neural Embeddings Model
 
-**Implementation Details:**
+We implemented **two versions** of the neural n-embedding model:  
 
-- This model is implemented **entirely in NumPy**, with no additional libraries for neural networks.  
-- All operations, including forward passes, backpropagation, and weight updates, are manually coded using NumPy arrays.  
+- **Hard-coded NumPy version** – every forward pass, backpropagation step, and weight update is manually implemented using only NumPy arrays. This gives full transparency into the math but is extremely slow in practice.  
+- **PyTorch version** – functionally equivalent, but leveraging PyTorch for efficient tensor operations, GPU acceleration, and faster experimentation.  
+
+⚠️ **Note on Results:** Although both models are implemented, we only report results from the **fast (PyTorch) version**. The reason is not just that the NumPy implementation is slow, but more importantly because the **fast model was trained on the full dataset**, providing results that are both reliable and representative. The slow version, while educational, would have required impractically long runtimes to reach the same scale.
+
+---
+
+**Implementation Details:**  
+
 - The network learns embeddings for tokens and predicts the next token based on the previous *n* tokens.  
 - **Early stopping** is implemented with a configurable **patience** parameter: training halts if validation loss does not improve for a set number of epochs.  
 - **Checkpointing** ensures that the best model (lowest validation loss) is saved during training, allowing safe recovery and selection of the optimal parameters.  
-- This approach allows full control over the model internals and serves as an educational implementation of a neural language model from scratch.
+- The dual implementation (NumPy + PyTorch) gives both **educational transparency** and **practical efficiency**.
+
+**Training and model configuration**
 <div style="display:flex; gap: 50px;">
 
 <div>
@@ -246,7 +275,7 @@ The **neural n-embedding model** extends the classic n-gram by learning embeddin
 
 </div>
 
-**C. Notes / Special Features**
+**Notes / Special Features**
 
 - Early stopping with `patience=3`
 - Checkpointing to save the best model (lowest validation loss)
@@ -256,7 +285,7 @@ The **neural n-embedding model** extends the classic n-gram by learning embeddin
 
 **Results:**
 
-- Perplexity (validation set): 62.4458
+- Perplexity (validation set): **62.4458**
 - Observations: Produces more coherent sequences compared to the classic n-gram; captures some stylistic features of Shakespeare.
 
 **Plots:**
@@ -276,9 +305,23 @@ The **neural n-embedding model** extends the classic n-gram by learning embeddin
 ### 4.3 GPT-based Model
 
 The **GPT-based model** leverages transformers and causal self-attention to model long-range dependencies and generate high-quality text.
-<div style="display:flex; gap: 50px;">
 
-**GPT Configuration
+**Implementation Details**  
+
+This model was built **entirely from scratch in PyTorch**, without relying on external transformer libraries. Each component was manually implemented to maximize transparency and educational value:  
+
+- **Token + Positional Embeddings** – tokens are embedded into high-dimensional vectors, with positional encodings added to preserve sequence order.  
+- **Causal Self-Attention** – multi-head masked attention ensures each token attends only to previous tokens, enforcing autoregressive generation.  
+- **Transformer Blocks** – each block contains self-attention, residual connections, layer normalization, and a feed-forward network.  
+- **Stacked Architecture** – 4 transformer layers, each with 6 attention heads, enabling hierarchical representation learning.  
+- **Final Linear + Softmax Head** – projects hidden states back to the vocabulary size for next-token prediction.  
+
+We conducted **32 experiments across different hyperparameter settings** (embedding sizes, learning rates, dropout, etc.). From this set, we extracted the **top 4 models** for analysis, balancing validation perplexity and qualitative text generation quality.  
+
+---
+
+**Training and model configuration**
+<div style="display:flex; gap: 50px;">
 <div>
 <h4>Model Hyperparameters</h4>
 <table>
@@ -306,7 +349,7 @@ The **GPT-based model** leverages transformers and causal self-attention to mode
 
 </div>
 
-**C. Notes / Special Features**
+**Notes / Special Features**
 
 - Causal self-attention (transformer architecture)
 - Uses **BPE vocabulary size `k=200`** (selected from n-gram experiments)  
@@ -315,7 +358,7 @@ The **GPT-based model** leverages transformers and causal self-attention to mode
 
 **Results:**
 
-- Perplexity (validation set): 14.53
+- Perplexity (validation set): **14.53**
 - Observations: Best performance overall; generates fluent, stylistically faithful text resembling Shakespeare.
 ---
 #### GPT Experiments – Selected Models
@@ -342,21 +385,25 @@ To evaluate the GPT models, we selected the baseline and the best experiments tr
 --- 
 #### Plots – Selected GPT Experiments
 
-**Baseline (A_Baseline)**  
-**Training Loss Curve** – shows the decrease in training loss over 5,000 iterations.  
-![A_Baseline Loss Curve](docs/gpt/A_Baseline/loss_curve.png)  
-
-**Validation Perplexity** – tracks model perplexity on the validation set over training iterations.  
-![A_Baseline Validation Perplexity](docs/gpt/A_Baseline/val_perplexity.png)  
-
----
-
 **B_Embedding_Sweep_384**  
 **Training Loss Curve** – demonstrates faster convergence thanks to the larger embedding size.  
 ![B_Embedding_Sweep_384 Loss Curve](docs/gpt/B_Embedding_Sweep_384/loss_curve.png)  
 
 **Validation Perplexity** – shows how validation perplexity improves with larger embeddings.  
 ![B_Embedding_Sweep_384 Validation Perplexity](docs/gpt/B_Embedding_Sweep_384/val_perplexity.png)  
+
+---
+
+## 5. Appendix
+
+### GPT Additional Experiments
+
+**Baseline (A_Baseline)**  
+**Training Loss Curve** – shows the decrease in training loss over 5,000 iterations.  
+![A_Baseline Loss Curve](docs/gpt/A_Baseline/loss_curve.png)  
+
+**Validation Perplexity** – tracks model perplexity on the validation set over training iterations.  
+![A_Baseline Validation Perplexity](docs/gpt/A_Baseline/val_perplexity.png)  
 
 ---
 
@@ -384,3 +431,5 @@ To evaluate the GPT models, we selected the baseline and the best experiments tr
 
 **Validation Perplexity** – lowest validation perplexity achieved due to extended training.  
 ![Z_Long_Training_Best_Guess Validation Perplexity](docs/gpt/Z_Long_Training_Best_Guess/val_perplexity.png)  
+
+---
