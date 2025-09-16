@@ -364,7 +364,7 @@ class NeuralEmbedTrainer:
         # Try to load a final/best model unless forced to retrain
         if not force_retrain:
             try:
-                model = self._load_state(filename="best_model.pkl", final=True)
+                model = self._load_state(filename="best_model.pkl", final=final)
                 print(
                     f"{Colors.OKGREEN}[OK]{Colors.ENDC} Loading .pkl from final saved model."
                 )
