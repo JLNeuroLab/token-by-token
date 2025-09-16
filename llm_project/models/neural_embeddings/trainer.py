@@ -36,7 +36,7 @@ class NeuralEmbedTrainer:
 
         self.root = root or get_project_root()
         self.model_dir = os.path.join(
-            self.root, "experiments", "models", "neural_ngrams"
+            self.root, "experiments", "models", "neuralslow"
         )
         os.makedirs(self.model_dir, exist_ok=True)
 
@@ -117,7 +117,7 @@ class NeuralEmbedTrainer:
 
     def _save_state(self, subdir=None, filename=None, final=None):
         final_flag = final if final is not None else getattr(self, "final", False)
-        model_subdir = "neural_ngrams"
+        model_subdir = "neuralslow"
         target_subdir = os.path.join(
             model_subdir, "final" if final_flag else "checkpoints"
         )
@@ -136,7 +136,7 @@ class NeuralEmbedTrainer:
         final_flag = final if final is not None else getattr(self, "final", False)
         filename = filename or "best_model.pkl"
         subdir = subdir or os.path.join(
-            "neural_ngrams", "final" if final_flag else "checkpoints"
+            "neuralslow", "final" if final_flag else "checkpoints"
         )
 
         model_data = load_model(
@@ -246,6 +246,80 @@ class NeuralEmbedTrainer:
         plt.close(fig)
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Perplexity plot saved to {save_path}")
 
+    def plot_loss_curves(
+        self, train_losses, val_losses, root, filename="loss_curves.png", final=False
+    ):
+        """
+        Plot and save training and validation loss curves per epoch.
+
+        Args:
+            train_losses (list or array): List of training losses per epoch.
+            val_losses (list or array): List of validation losses per epoch.
+            root (str): Project root path.
+            filename (str): Name of the saved figure.
+            final (bool): Whether to save in final folder (saved_models) or experiments.
+        """
+        import matplotlib.pyplot as plt
+        from llm_project.utils.file_manager import get_model_path
+        from llm_project.utils.debugg_utils import Colors
+        import os
+
+        # Make sure losses are lists of epoch averages
+        train_losses = list(train_losses)
+        val_losses = list(val_losses)
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(train_losses, marker="o", color="blue", label="Train Loss")
+        ax.plot(val_losses, marker="o", color="red", label="Validation Loss")
+        ax.set_title("Train and Validation Loss per Epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.grid(True, linestyle="--", alpha=0.6)
+        ax.legend()
+
+        folder = get_model_path(root, "models", subdir="neuralslow", final=final)
+        os.makedirs(folder, exist_ok=True)
+        save_path = os.path.join(folder, filename)
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
+        plt.close(fig)
+        print(
+            f"{Colors.OKGREEN}[OK]{Colors.ENDC} Train/Validation loss plot saved to {save_path}"
+        )
+
+    def plot_val_perplexity_per_epoch(
+        self, val_perplexities, filename="val_perplexity_by_epoch.png", final=False
+    ):
+        """
+        Plot and save validation perplexity per epoch.
+
+        Args:
+            val_perplexities (list): List of validation perplexities per epoch.
+            filename (str): Name of the saved figure.
+            final (bool): Whether to save in final folder (saved_models) or experiments.
+        """
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(
+            val_perplexities, marker="o", color="blue", label="Validation Perplexity"
+        )
+        ax.set_title("Validation Perplexity per Epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Perplexity")
+        ax.grid(True, linestyle="--", alpha=0.6)
+        ax.legend()
+
+        # Determine folder based on final flag
+        folder = get_model_path(self.root, "models", subdir="neuralslow", final=final)
+        os.makedirs(folder, exist_ok=True)
+        save_path = os.path.join(folder, filename)
+
+        fig.savefig(save_path, bbox_inches="tight", dpi=150)
+        plt.close(fig)
+        print(
+            f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}"
+        )
+
     # ---- training ----
     def train(
         self,
@@ -315,21 +389,24 @@ class NeuralEmbedTrainer:
         self.model.block_size = self.block_size
         self.model.batch_size = self.batch_size
 
-        losses, val_losses = [], []
+        train_losses_per_epoch, val_losses_per_epoch = [], []
+        val_perplexities = []
         best_val_loss = float("inf")
         patience_counter = 0
         step = 0
         checkpoint_list = []  # list[(val_loss, filename)]
-        val_per_epoch = []
 
         for epoch in range(epochs):
             n_batches = max(1, len(self.train_ids) // self.batch_size)
+            epoch_loss = 0.0
+
             for _ in range(n_batches):
                 X_batch, y_batch = self.get_batch(self.train_ids)
                 logits = self.model.forward(X_batch)
                 loss, probs = self.model.cross_entropy_loss(logits, y_batch)
+                epoch_loss += loss
+
                 self.model.backward(X_batch, y_batch, probs, lr=lr)
-                losses.append(loss)
 
                 if step % self.print_every == 0:
                     ram_mb, _ = get_proc_mem_mb()
@@ -340,17 +417,25 @@ class NeuralEmbedTrainer:
                     get_proc_cpu_percent(prime=True)
                 step += 1
 
+            avg_epoch_loss = epoch_loss / n_batches
+            train_losses_per_epoch.append(avg_epoch_loss)
+            print(f"Epoch {epoch + 1}/{epochs} | Avg Train Loss: {avg_epoch_loss:.4f}")
+
             # Validation + checkpoint
             if self.val_ids:
                 X_val, y_val = self.get_batch(self.val_ids)
                 val_logits = self.model.forward(X_val)
                 val_loss, _ = self.model.cross_entropy_loss(val_logits, y_val)
-                val_losses.append(val_loss)
-                val_per_epoch.append(float(np.exp(val_loss)))
+                val_losses_per_epoch.append(val_loss)
+                val_perplexities.append(float(np.exp(val_loss)))
+                print(
+                    f"Validation Loss: {val_loss:.4f}, Perplexity: {val_perplexities[-1]:.4f}"
+                )
+
                 cpu_p = get_proc_cpu_percent()
                 ram_mb, _ = get_proc_mem_mb()
                 print(
-                    f"[valid] Epoch {epoch + 1}/{epochs} | Step {step} | RAM: {ram_mb:.2f}mb ({ram_mb / 1024:.2f}Gb) | CPU: {cpu_p:.1f}%"
+                    f"[valid] Epoch {epoch + 1}/{epochs} | Step {step} | Validation loss {val_loss} | RAM: {ram_mb:.2f}mb ({ram_mb / 1024:.2f}Gb) | CPU: {cpu_p:.1f}%"
                 )
                 get_proc_cpu_percent(prime=True)
 
@@ -366,7 +451,7 @@ class NeuralEmbedTrainer:
                         self.root,
                         "experiments",
                         "models",
-                        "neural_ngrams",
+                        "neuralslow",
                         "checkpoints",
                         remove_ckpt,
                     )
@@ -399,25 +484,16 @@ class NeuralEmbedTrainer:
 
             if patience_counter >= patience:
                 break
+        
+        self.plot_loss_curves(
+            train_losses=train_losses_per_epoch,
+            val_losses=val_losses_per_epoch,
+            root=self.root,
+            final=final,
+        )
 
-        # Diagnostic plots
-        self.plot_perplexity()
+        self.plot_val_perplexity_per_epoch(
+            val_perplexities=val_perplexities, final=final
+        )
 
-        # Per-epoch validation perplexity plot
-        if val_per_epoch:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.plot(val_per_epoch, marker="o", label="Validation Perplexity")
-            ax.set_title("Validation Perplexity per Epoch")
-            ax.set_xlabel("Epoch")
-            ax.set_ylabel("Perplexity")
-            ax.grid(True, linestyle="--", alpha=0.6)
-            ax.legend()
-            os.makedirs(self.model_dir, exist_ok=True)
-            save_path = os.path.join(self.model_dir, "val_perplexity_by_epoch.png")
-            fig.savefig(save_path, bbox_inches="tight", dpi=150)
-            plt.close(fig)
-            print(
-                f"{Colors.OKGREEN}[OK]{Colors.ENDC} Validation perplexity plot saved to {save_path}"
-            )
-
-        return losses, val_losses
+        return train_losses_per_epoch, val_losses_per_epoch
