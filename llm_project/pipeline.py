@@ -911,7 +911,7 @@ class LM_Pipeline:
                                     self.project_root,
                                     "experiments",
                                     "models",
-                                    "neural_ngrams",
+                                    "neuralslow",
                                     "checkpoints",
                                 )
                                 candidates = sorted(

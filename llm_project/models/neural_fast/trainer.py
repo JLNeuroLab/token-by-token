@@ -77,6 +77,24 @@ class NeuralTrainer:
         return X, y
 
     # ------------------- SAVE / LOAD -------------------
+    def _state_dict(self):
+        if self.model is None:
+            raise ValueError("Model not initialized")
+        # for GPT we store the torch state_dict plus a small meta
+        return {
+            "state_dict": self.model.state_dict(),
+            "meta": {
+                "k": self.k,
+                "embd_dim": getattr(self.config, "embd_dim", None),
+                "layer_dim": getattr(self.config, "layer_dim", None),
+                "n_heads": getattr(self.config, "n_heads", None),
+                "block_size": getattr(self.config, "block_size", None),
+                "dropout": getattr(self.config, "dropout", None),
+                "device": self.device_str,
+                "vocab_size": int(self._vocab_size()),
+            },
+        }
+    
     def _save_state(self, subdir=None, filename=None, final=None):
         """
         Salva lo stato completo del modello, optimizer, vocab e config.
@@ -114,11 +132,18 @@ class NeuralTrainer:
         Carica lo stato completo del modello, optimizer, vocab e config.
         """
         final_flag = final if final is not None else getattr(self, "final", False)
-        filename = filename or "best_model.pkl"
-        # Usa il subdir passato oppure default coerente con final_flag
-        target_subdir = subdir or os.path.join(
-            "neuralfast", "final" if final else "checkpoints"
-        )
+        # se subdir non è passato, punta alla cartella giusta
+        target_subdir = subdir or ("neuralfast/final" if final_flag else "neuralfast/checkpoints")
+
+        folder_path = get_model_path(self.root, "models", subdir=target_subdir, final=final_flag)
+
+        if filename is None:
+            # Pick last .pkl file if not specified
+            files = sorted([f for f in os.listdir(folder_path) if f.endswith(".pkl")])
+            if not files:
+                raise FileNotFoundError(f"No checkpoint found in {folder_path}")
+            filename = files[-1]
+
 
         state = load_model(
             root=self.root,
@@ -311,7 +336,7 @@ class NeuralTrainer:
 
         if not force_retrain:
             try:
-                model = self._load_state(filename="best_model.pkl", final=final)
+                model = self._load_state(final=final)
 
                 print(
                     f"\n{Colors.OKGREEN}[OK]{Colors.ENDC} Loading file from saved model."
@@ -385,17 +410,13 @@ class NeuralTrainer:
                 # ---------------- SAVE BEST MODEL ----------------
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    self._save_state(
-                        subdir="final", filename="best_model.pkl", final=final
-                    )
-                    print(
-                        f"{Colors.OKGREEN}[CHECK]{Colors.ENDC} Best model updated at epoch {epoch + 1}"
-                    )
                     patience_counter = 0
+                    print(
+                        f"{Colors.OKGREEN}[CHECK]{Colors.ENDC} New best model at epoch {epoch + 1} (val_loss={val_loss:.4f})"
+                    )
                 else:
                     patience_counter += 1
                     print(f"No improvement (patience {patience_counter}/{patience})")
-
                 # ---------------- EARLY STOPPING ----------------
                 if patience_counter >= patience:
                     print(

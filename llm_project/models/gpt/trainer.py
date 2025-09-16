@@ -196,14 +196,43 @@ class GptTrainer:
             json.dump(meta, f, indent=2)
 
     def _load_state(self, file_path):
-        # file_path should be a .pth (relative or absolute)
         full_path = (
             file_path
             if os.path.isabs(file_path)
             else os.path.join(self.model_folder, file_path)
         )
-        self._build_model()  # ensure model is constructed
-        self.model.load_state_dict(torch.load(full_path, map_location=self.device))
+
+        # peek checkpoint
+        sd = torch.load(full_path, map_location="cpu")
+        if isinstance(sd, dict) and "tok_emb.weight" not in sd:
+            for k in ("model_state_dict", "state_dict", "model"):
+                if k in sd and isinstance(sd[k], dict):
+                    sd = sd[k]
+                    break
+
+        ckpt_vocab = sd["tok_emb.weight"].shape[0]
+
+        # check mismatch vocab size
+        if ckpt_vocab != int(self._vocab_size()):
+            print(
+                f"{Colors.WARNING}[WARNING]{Colors.ENDC} GPT vocab mismatch "
+                f"(ckpt {ckpt_vocab} vs tokenizer {self._vocab_size()}). "
+                f"Rebuilding model with checkpoint vocab."
+            )
+            # force config vocab to checkpoint value
+            self.config.vocab_size = int(ckpt_vocab)
+
+            # rebuild model with checkpoint vocab size
+            self._build_model()
+
+        else:
+            # normal build
+            self._build_model()
+
+        # load weights
+        self.model.load_state_dict(sd, strict=False)  # strict=False to ignore harmless extra keys
+        self.model.to(self.device)
+
         return self.model
 
     # ---------- model stuff ----------
@@ -217,7 +246,10 @@ class GptTrainer:
 
     def _build_model(self):
         # Map your config (configs/configs.py) → model config
-        vocab_size = self._vocab_size()
+        if hasattr(self.config, "vocab_size") and self.config.vocab_size is not None:
+            vocab_size = int(self.config.vocab_size)
+        else:
+            vocab_size = self._vocab_size()
         embd_dim = int(getattr(self.config, "embd_dim", 384))
         layer_dim = int(
             getattr(self.config, "layer_dim", 4)
@@ -295,10 +327,10 @@ class GptTrainer:
         if valid_limit:
             self.val_ids = self.val_ids[:valid_limit]
 
-        # if (not force_retrain) and os.path.exists(self.model_path):
-        #     print("Loading pre-trained GPT")
-        #     self._load_state(self.model_path)
-        #     return self.model
+        if (not force_retrain) and os.path.exists(self.model_path):
+             print("Loading pre-trained GPT")
+             self._load_state(self.model_path)
+             return self.model
 
         print(f"{Colors.OKCYAN}[INFO]{Colors.ENDC} Training GPT model")
         model = self.model
