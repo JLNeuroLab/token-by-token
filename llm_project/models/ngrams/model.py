@@ -22,7 +22,9 @@ class NGram:
         # Debug tracking
         self._last_step_time = time.time()
         self.step_times = {}
-
+        # Random 
+        self.rng = np.random.default_rng()
+        
     def _debug_resources(self, step_name):
         if not self.debug:
             return
@@ -229,7 +231,14 @@ class NGram:
 
         # ---------- PREDICT / GENERATE ----------
 
-    def predict_next_token_sampling(self, context, lambdas):
+    # def top_k_sampling(self,  probs, k=5):
+    #     indices = np.argsort(probs)[-k:] 
+    #     top_candidates = [candidates[i] for i in indices]
+    #     top_probs = probs[indices]
+    #     top_probs /= top_probs.sum()
+    #     return np.random.choice(top_candidates, p=top_probs)
+
+    def predict_next_token_sampling(self, context, lambdas, k=5):
         """Predicts the next token using interpolated probabilities."""
         context = tuple(context)
         if context not in self.ngram_dict:
@@ -247,14 +256,19 @@ class NGram:
                                                                 #           a tuple object.
         ] 
         probs = np.array(probs, dtype=float)
-        # Normalize probabilities
-        probs /= probs.sum()
-        # Sample a token over the candidates according to the distribution of probs
-        chosen_token = np.random.choice(candidates, p=probs)
+        probs /= sum(probs) # Noramlize
+        # Top-K sampling
+        if k is not None and k < len(candidates):
+            top_indices = np.argsort(probs)[-k:]
+            candidates = [candidates[i] for i in top_indices]
+            probs = probs[top_indices]
 
+            probs /= probs.sum()  # renormalize
+        chosen_token = self.rng.choice(candidates, p=probs)
         return chosen_token
+    
 
-    def generate_text(self, prompt_tokens, max_length=50):
+    def generate_text(self, prompt_tokens, max_length=50, top_k=None):
         """Generates text from a prompt, with automatic backoff."""
         if not self.ngram_freqs:
             raise ValueError("Model is not trained. Train the model first.")
@@ -269,7 +283,7 @@ class NGram:
             for n_context in range(self.n - 1, 0, -1):
                 if len(generated) >= n_context:
                     context = tuple(generated[-n_context:])
-                    next_token = self.predict_next_token_sampling(context, best_lambdas)
+                    next_token = self.predict_next_token_sampling(context, best_lambdas, k=top_k)
                     if next_token:
                         break
 

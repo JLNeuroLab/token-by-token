@@ -1,5 +1,6 @@
 import torch
 
+
 class BaseConfig:
     def __init__(self, device, **kwargs):
         for key, value in kwargs.items():
@@ -7,7 +8,7 @@ class BaseConfig:
         self.device = device
 
 
-class GPTConfig(BaseConfig):
+class GptConfig(BaseConfig):
     """
     Base configuration class for GPT models.
 
@@ -55,7 +56,7 @@ class GPTConfig(BaseConfig):
         device: str | None = None,
         n_head: int | None = None,
         n_layer: int | None = None,
-    ) -> "GPTConfig":
+    ) -> "GptConfig":
         """
         Supplies defaults. Use this in trainers instead of calling __init__ directly.
         """
@@ -128,6 +129,7 @@ class NeuralConfig(BaseConfig):
         self.vocab_size = vocab_size
         self.embd_dim = embd_dim
         self.block_size = block_size
+        self.device = "cpu"
 
     def display(self):
         print("Neural n-gram configuration")
