@@ -359,7 +359,7 @@ class GptTrainer:
                 val_curve.append(vl)
                 if vl < best_val:
                     best_val = vl
-                    self._save_state(subdir="gpt", filename=self.model_fname, val_loss=vl, val_perplexity=ppl)
+                    self._save_state(filename=self.model_fname, val_loss=vl, val_perplexity=ppl)
                     # also write a small meta JSON with latest val
                     meta = self._state_dict()["meta"]
                     meta.update({"val_loss": float(vl), "step": int(it)})
@@ -395,7 +395,7 @@ class GptTrainer:
                 ram_log.append(ram_mb)
 
         # final save
-        self._save_state(subdir="gpt", filename=self.model_fname, val_loss=vl, val_perplexity=ppl)
+        self._save_state(filename=self.model_fname, val_loss=vl, val_perplexity=ppl)
         print(f"{Colors.OKGREEN}[OK]{Colors.ENDC} Model saved to: {self.model_path}")
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(
