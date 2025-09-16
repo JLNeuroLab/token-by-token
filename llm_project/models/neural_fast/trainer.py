@@ -77,25 +77,26 @@ class NeuralTrainer:
         return X, y
 
     # ------------------- SAVE / LOAD -------------------
-    def _state_dict(self):
+    def _state_dict(self, val_loss=None, val_perplexity=None):
         if self.model is None:
             raise ValueError("Model not initialized")
         # for GPT we store the torch state_dict plus a small meta
         return {
             "state_dict": self.model.state_dict(),
             "meta": {
-                "k": self.k,
+                "n": getattr(self.model, "n", None),
+                "k": self.max_k,
+                "batch_size": self.batch_size,
                 "embd_dim": getattr(self.config, "embd_dim", None),
-                "layer_dim": getattr(self.config, "layer_dim", None),
-                "n_heads": getattr(self.config, "n_heads", None),
                 "block_size": getattr(self.config, "block_size", None),
-                "dropout": getattr(self.config, "dropout", None),
-                "device": self.device_str,
-                "vocab_size": int(self._vocab_size()),
+                "device": str(self.device),
+                "vocab_size": int(self.config.vocab_size),
+                "val_perplexity": val_perplexity,
+                "val_loss": val_loss
             },
         }
     
-    def _save_state(self, subdir=None, filename=None, final=None):
+    def _save_state(self, subdir=None, filename=None, final=None, val_loss=None, val_perplexity=None):
         """
         Salva lo stato completo del modello, optimizer, vocab e config.
         """
@@ -107,14 +108,13 @@ class NeuralTrainer:
             if not final_flag
             else os.path.join(model_subdir, "final")
         )
-        # Crea lo stato da salvare
-        state = {
-            "model": self.model,
-            "optimizer": self.optimizer,
-            "id2token": getattr(self, "id2token", None),
-            "token2id": getattr(self, "token2id", None),
-            "config": self.config,
-        }
+
+        state = self._state_dict(val_loss=val_loss, val_perplexity=val_perplexity)
+        state.update(
+            {"val_loss": val_loss,
+             "val_perplexity": val_perplexity
+             }
+        )
 
         full_path = save_model(
             state,
@@ -395,7 +395,11 @@ class NeuralTrainer:
                 # ---------------- SAVE CHECKPOINT ----------------
                 ckpt_name = f"epoch{epoch + 1}_val{val_loss:.4f}.pkl"
                 ckpt_path = self._save_state(
-                    subdir="checkpoints", filename=ckpt_name, final=final
+                    subdir="checkpoints", 
+                    filename=ckpt_name, 
+                    final=final,
+                    val_loss=val_loss,
+                    val_perplexity=val_perplexities[-1]
                 )
                 checkpoint_list.append((val_loss, ckpt_path))
                 # sort by validation loss
