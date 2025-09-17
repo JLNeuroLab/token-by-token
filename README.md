@@ -130,18 +130,34 @@ Token console > Console mode (manual / assisted / exit) [manual if blank]: manua
 **Example usage:**
 ```
 Train examples
+# train ngram
+train --model ngram --n 3 --tune_lambdas --max_k 800 --force_model
 
-train --model gpt --max_iters 5000 --dropout 0.1 --embd_dim 128 --n_layer 4
-train --model ngram --n 3 --tune_lambdas --force_retrain
-train --model neural --n 3 --epochs 10 --batch_size 32 --block_size 8 --embedding_dim 16 --force_retrain
+# train neural_slow
+train --model neural_slow --n 3 --epochs 10 --batch_size 64 --block_size 16 --embd_dim 256 --lr 3e-4 --patience 3 --force_model
+
+# train neual_fast
+train --model neural_fast --n 3 --epochs 10 --batch_size 128 --block_size 32 --embd_dim 384 --lr 3e-4 --patience 3 --force_model
+
+# train gpt
+train --model gpt --epochs 10 --batch_size 128 --block_size 64 --embd_dim 384 --n_layer 4 --n_heads 6 --lr 3e-4 --force_model
 ```
 ---
 ```
 Generate examples
 
-generate --model gpt --prompt "To be or not to be" --max_new_tokens 100
-generate --model ngram --prompt "Once upon a time" --max_new_tokens 100
-generate --model neural_fast --prompt "Boss, I'm tired" --max_new_tokens 100
+# generate with ngram
+generate --model ngram --prompt "To be or not to" --max_new_tokens 100 --top_k 40 --top_p 0.9 --temperature 0.9
+
+# generate with neural_slow
+generate --model neural --prompt "Once upon a time" --max_new_tokens 100 --top_k 50 --top_p 0.9 --temperature 0.9
+
+# generate with neural_fast
+generate --model neural_fast --prompt "In a galaxy far away" --max_new_tokens 100 --top_k 50 --top_p 0.95 --temperature 0.9
+
+# generate with gpt
+generate --model gpt --prompt "The meaning of life is" --max_new_tokens 100 --top_k 50 --top_p 0.95 --temperature 0.9
+
 ```
 ### 3.2 Assisted Mode
 

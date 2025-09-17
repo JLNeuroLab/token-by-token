@@ -15,9 +15,6 @@ from llm_project.models.neural_fast.trainer import NeuralTrainer
 from llm_project.models.neural_embeddings.trainer import NeuralEmbedTrainer
 from llm_project.models.gpt.trainer import GptTrainer
 
-# -------------- MODEL IMPORTS ----------------
-# from llm_project.models.neural_ngrams.model import NeuralNgram
-
 # -------------- CONFIG IMPORTS ----------------
 from llm_project.models.configs.configs import (
     NgramConfig,
@@ -97,8 +94,12 @@ class LM_Pipeline:
         """
         mt = (self.model_type or "").lower()  # Making sure it exists
 
+
+        if force_retrain and self.tokenizer is not None:
+            print(f"{Colors.WARNING}[TOKENIZER]{Colors.ENDC} Force retraining tokenizer despite existing instance.")
+            self.tokenizer = None
         # --- CASE 1: tokenizer available (in the eventuality you want to add one) and train not forced
-        if self.tokenizer is not None and not force_retrain:
+        if self.tokenizer is not None and force_retrain:
             # Load the existing tokenizer
             print(f"{Colors.OKCYAN}[TOKENIZER]{Colors.ENDC} Using provided tokenizer.")
             tokens = (
@@ -308,7 +309,13 @@ class LM_Pipeline:
             self.trainer = NGramTrainer(
                 config=self.config, model=None, tokens=train_tokens, k=self.max_k
             )
-            self.trainer.train()
+            self.trainer.train(
+                                force_retrain=force_retrain,  # <- forward the CLI arg
+                                tune_lambdas=getattr(self, "tune_lambdas", True),
+                                train_limit=getattr(self, "train_limit", None),
+                                valid_limit=getattr(self, "valid_limit", None),
+                                final=self.final
+                            )
             self.trainer.final = self.final
             # final=self.final why inside paramms and not mine NEW FROM MERGE
             self.model = self.trainer.model
@@ -511,6 +518,7 @@ class LM_Pipeline:
     ):
         """Full automatic pipeline: tokenizer → tokens → trainer → model"""
 
+        self.force_model = force_retrain_model
         if train_text is None:
             raise ValueError(
                 f"{Colors.FAIL}[ERROR]{Colors.ENDC} train_text must be provided"
@@ -1220,8 +1228,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--device", default="cpu", help="cpu|cuda|mps")
     parser.add_argument("--max_k", type=int, default=800, help="BPE merges")
-    parser.add_argument("--train_limit", type=int, default=100_000)
-    parser.add_argument("--valid_limit", type=int, default=10_000)
+    parser.add_argument("--train_limit", type=int, default=None)
+    parser.add_argument("--valid_limit", type=int, default=None)
     parser.add_argument(
         "--force_tokenizer",
         "--force_bpe",
@@ -1235,6 +1243,8 @@ if __name__ == "__main__":
     )
 
     # model knobs
+    parser.add_argument("--tune_lambdas", action="store_true", 
+                        help="tune lambdas weights for interpolated probabilities in ngram")
     parser.add_argument("--n", type=int, default=3, help="ngram order")
     parser.add_argument("--embd_dim", type=int, default=256)
     parser.add_argument("--block_size", type=int, default=8)
@@ -1244,6 +1254,8 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--weight_decay", type=float, default=0.0)
     parser.add_argument("--grad_clip", type=float, default=None)
+    parser.add_argument("--n_layers", type=int, default=4)
+    parser.add_argument("--n_heads", type=int, default=6)
 
     # generation args
     parser.add_argument("--prompt", type=str, default="", help="Prompt for generation")
@@ -1291,8 +1303,8 @@ if __name__ == "__main__":
     elif args.model in GPT_NAMES:
         cfg = GptConfig(
             vocab_size=0,
-            n_heads=6,
-            layer_dim=4,
+            n_heads=args.n_heads,
+            layer_dim=args.n_layers,
             embd_dim=384,
             block_size=64,
             dropout=0.2,
