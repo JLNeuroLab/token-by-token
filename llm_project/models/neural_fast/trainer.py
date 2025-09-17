@@ -149,7 +149,11 @@ class NeuralTrainer:
         # Select last checkpoint if filename not provided
         if filename is None:
             files = sorted([f for f in os.listdir(folder_path) if f.endswith(".pth")])
-            filename = files[0]
+            try:
+                filename = files[-1]
+            except:
+                raise FileNotFoundError(f"{Colors.FAIL}[FAIL]{Colors.ENDC} No checkpoint found in {folder_path}. Train a model first")
+
 
         # Load checkpoint
         state = torch.load(os.path.join(folder_path, filename), map_location="cpu")

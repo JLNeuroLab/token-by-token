@@ -306,7 +306,7 @@ class LM_Pipeline:
         ##########################
         if model_type in NGRAM_NAMES:
             self.trainer = NGramTrainer(
-                config=self.config, model=None, tokens=train_tokens, k=max_k
+                config=self.config, model=None, tokens=train_tokens, k=self.max_k
             )
             self.trainer.train()
             self.trainer.final = self.final
@@ -756,9 +756,9 @@ class LM_Pipeline:
         if mt in NGRAM_NAMES:
             # 1) Try to load a pre-trained n-gram if requested
             if from_pretrained and self.model is None:
-                k_eff = getattr(
-                    getattr(self, "tokenizer", None), "k", getattr(self, "max_k", None)
-                )
+                k_eff = getattr(self, "max_k", None)
+                if k_eff is None and hasattr(self, "tokenizer"):
+                    k_eff = getattr(self.tokenizer, "k", None)
                 model_fname = f"ngram_model_n{self.config.n}_k{k_eff}.pkl"
                 model_folder = get_model_path(
                     self.project_root, category="models", subdir="ngram", final=True
@@ -769,7 +769,7 @@ class LM_Pipeline:
                     # When loading, trainer can be created without prompt tokens;
                     # it needs config and (optionally) corpus tokens if its loader expects them.
                     loader = NGramTrainer(
-                        config=self.config, model=None, tokens=None, k=self.config.n
+                        config=self.config, model=None, tokens=None, k=self.tokenizer.max_k
                     )
                     self.model = loader._load_state(model_path, final=True)
 
@@ -787,7 +787,7 @@ class LM_Pipeline:
                     config=self.config,
                     model=None,
                     tokens=corpus_tokens,
-                    k=self.config.n,
+                    k=self.tokenizer.max_k,
                 )
                 self.trainer.train()
                 self.model = self.trainer.model
@@ -856,7 +856,7 @@ class LM_Pipeline:
                 # ---- load checkpoint ----
                 loaded = False
                 try:
-                    self.model = self.trainer._load_state(filename=None, final=False)
+                    self.model = self.trainer._load_state(filename=None, final=self.final)
                     loaded = True
                 except (FileNotFoundError, AttributeError):
                     if hasattr(self.trainer, "load"):
@@ -864,7 +864,7 @@ class LM_Pipeline:
                         loaded = True
 
                 if not loaded:
-                    raise FileNotFoundError(f"No {mt} checkpoint found. Train {mt} first.")
+                    raise FileNotFoundError(f"{Colors.FAIL}[FAIL]{Colors.ENDC} No {mt} checkpoint found. Train {mt} first.")
 
             # ---- encode prompt ----
             unk_id = getattr(self, "unk_id", 0)
