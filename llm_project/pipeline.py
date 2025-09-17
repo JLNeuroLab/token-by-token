@@ -864,7 +864,7 @@ class LM_Pipeline:
                         loaded = True
 
                 if not loaded:
-                    raise FileNotFoundError(f"{Colors.FAIL}[FAIL]{Colors.ENDC} No {mt} checkpoint found. Train {mt} first.")
+                    raise FileNotFoundError(f"{Colors.FAIL}[ERROR]{Colors.ENDC} No {mt} checkpoint found. Train {mt} first.")
 
             # ---- encode prompt ----
             unk_id = getattr(self, "unk_id", 0)
