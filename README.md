@@ -147,7 +147,7 @@ train --model gpt --epochs 10 --batch_size 128 --block_size 64 --embd_dim 384 --
 Generate examples
 
 # generate with ngram
-generate --model ngram --prompt "To be or not to" --max_new_tokens 100 --top_k 40 --top_p 0.9 --temperature 0.9
+generate --model ngram --prompt "To be or not to" --max_new_tokens 100 --top_k 40 
 
 # generate with neural_slow
 generate --model neural --prompt "Once upon a time" --max_new_tokens 100 --top_k 50 --top_p 0.9 --temperature 0.9
