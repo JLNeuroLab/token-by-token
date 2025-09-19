@@ -95,10 +95,10 @@ class NGramTrainer:
         model_data = load_model(
             root=self.root, filename=filename, final=final_flag, subdir="ngram"
         )
-
+        from collections import defaultdict
         self.model = NGram(tokens=model_data["tokens"], n=model_data["n"])
         self.model.ngram_freqs = model_data["ngram_freqs"]
-        self.model.ngram_dict = model_data["ngram_dict"]
+        self.model.ngram_dict = defaultdict(Counter, model_data["ngram_dict"])
         self.model.lambdas = model_data["lambdas"]
 
         return self.model
@@ -109,6 +109,7 @@ class NGramTrainer:
         tune_lambdas=True,
         train_limit=None,
         valid_limit=None,
+        valid_tokens=None,
         final=None,
     ):
         """Loads data and trains the N-gram model using pre-tokenized input."""
@@ -148,7 +149,7 @@ class NGramTrainer:
         self.model.build_all_ngram_freqs()
 
         if tune_lambdas:
-            best_lambdas, _, _ = self.tune_lambdas()
+            best_lambdas, _, _ = self.tune_lambdas(validation_tokens=valid_tokens)
             self.model.lambdas = {"best": best_lambdas}
         else:
             self.model.lambdas = {"default": [1 / self.n] * self.n}
@@ -229,7 +230,7 @@ class NGramTrainer:
             raise ValueError("Lambdas must sum to 1.")
         self.model.lambdas[label] = lambdas
 
-    def tune_lambdas(self, lambda_candidates=None, valid_limit=None, plot=True):
+    def tune_lambdas(self, validation_tokens, lambda_candidates=None, valid_limit=None, plot=True):
         """Finds optimal lambda weights by minimizing perplexity."""
         if lambda_candidates is None:
             lambda_candidates = {
@@ -238,8 +239,10 @@ class NGramTrainer:
                 "Bigram Focus": [0.1, 0.6, 0.3],
                 "Unigram Focus": [0.6, 0.3, 0.1],
             }
-
-        validation_tokens = self.tokens  # External tokens expected
+        if validation_tokens is None:
+            raise ValueError(
+                f"{Colors.FAIL}[ERROR]{Colors.ENDC} validation tokens must be provided from tokenized val_text (Use BPE_segmenter on val_text)"
+                )
         best_lambdas, lowest_perplexity, results = None, float("inf"), []
 
         for label, current_lambdas in tqdm(
@@ -301,28 +304,32 @@ if __name__ == "__main__":
 
     datapath = os.path.join(project_root, "data", "raw", "Shakespeare_clean_full.txt")
 
+    train_text = load_shakespeare("train")
+    val_text = load_shakespeare("validation")
     # --- BPE Setup ---
     max_k = 2000
-    bpe = BPE(max_k=max_k, datapath=datapath)
+    bpe = BPE(max_k=max_k, text=train_text)
 
     # Load and normalize text
     norm_text = bpe.load_and_normalize()
 
-    # Split train/test (10% test)
-    test_text, train_text = bpe.split_train_test()
-    bpe.train_text = train_text[:10000]
-    bpe.test_text = test_text[:1000]
+    train_limit = 10000
+    val_limit = 1000
 
-    # Train BPE on train_text
+    # Imposta train e validation
+    bpe.train_text = train_text[:train_limit]
+    bpe.test_text = val_text[:val_limit]
+
+    # Train BPE sul train_text
     bpe.text = bpe.train_text
     print("\n--- Training BPE ---\n")
     bpe.BPE_encoder()
 
-    # Tokenize train and test
+    # Tokenizza train e validation
     train_tokens = bpe.tokens
-    test_tokens = bpe.BPE_segmenter(bpe.test_text)
+    val_tokens = bpe.BPE_segmenter(bpe.test_text)
     print(f"Train tokens: {len(train_tokens)}")
-    print(f"Test tokens: {len(test_tokens)}\n")
+    print(f"Validation tokens: {len(val_tokens)}\n")
 
     # --- Save BPE tokenizer (merges) ---
     save_tokenizer(bpe, project_root, f"BPE_merges_k{max_k}.pkl", category="tokenizers")
@@ -333,7 +340,7 @@ if __name__ == "__main__":
 
     # Train N-gram
     ngram_model = trainer.train(
-        force_retrain=False, tune_lambdas=True, train_limit=10000, valid_limit=1000
+        force_retrain=True, tune_lambdas=True, train_limit=10000, valid_limit=1000, valid_tokens=val_tokens
     )
     print(
         f"{Colors.OKGREEN}[OK]{Colors.ENDC} N-gram model saved automatically by trainer."
@@ -341,5 +348,5 @@ if __name__ == "__main__":
 
     # Compute perplexity on test set
     best_lambdas = ngram_model.lambdas["best"]
-    perplexity = trainer.compute_perplexity(test_tokens, list(best_lambdas))
+    perplexity = trainer.compute_perplexity(val_tokens, list(best_lambdas))
     print(f"\nPerplexity on test set: {perplexity:.2f}\n")

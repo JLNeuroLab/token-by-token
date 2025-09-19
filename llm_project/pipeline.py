@@ -1283,7 +1283,7 @@ if __name__ == "__main__":
         cfg = NgramConfig(n=args.n, device=args.device)
 
     elif args.model in NEURAL_ALL:
-        cfg = NeuralConfig(
+        cfg = NeuralFastConfig(
             n=args.n,
             device=args.device,
             vocab_size=None,

@@ -337,6 +337,7 @@ class BPE:
         Returns:
             tokens (list of str): Tokenized version of the input text after applying all merges.
 
+        Shows a progress bar during segmentation using trange.
         """
         if text is None:
             if self.test_text is None:
@@ -345,9 +346,14 @@ class BPE:
                 )
             text = self.test_text
 
+        # Turn the text into a list of characters
         tokens = list(text)
+
         # We retrieve the merges of the training by retrieving the merges history
-        for pair, new_token in self.merges:
+        # Iterate over all learned merges with a progress bar
+        from tqdm import trange
+        for step in trange(len(self.merges), desc=f"{Colors.OKBLUE}[TOKENIZER]{Colors.ENDC} Segmenting text", ncols=100):
+            pair, new_token = self.merges[step]  # estrai il merge corrente
             i = 0
             new_tokens = []
             while i < len(tokens):
@@ -359,8 +365,9 @@ class BPE:
                 else:
                     new_tokens.append(tokens[i])
                     i += 1
-            # Same procedure as the second loop of the BPE method
+            # Update tokens for the next merge
             tokens = new_tokens
+
         # test_vocab = get_vocab(tokens)
         # save_item(" ".join(tokens), "test_results", "test_tokenized.txt")
         # save_item(test_vocab, "test_results", "test_final_vocab.pkl")
