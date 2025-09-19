@@ -232,7 +232,7 @@ class NeuralTester:
 
 class GptTester:
     def __init__(self, config):
-        self.test_text = load_shakespeare("test")[:1000]
+        self.test_text = load_shakespeare("test")
         self.test_tokens = None
         self.config = config
         self.root = get_project_root()
@@ -371,3 +371,21 @@ if __name__ == "__main__":
     print(f"{Colors.OKBLUE}[INFO]{Colors.ENDC} Evaluating GPT model on test set...")
     ppl = tester.evaluate()
     print(f"\n{Colors.OKGREEN}[Test Complete]{Colors.ENDC} GPT model perplexity on test set: {ppl:.2f}")
+
+
+   #--- Configurazione rapida per Neural Fast ---
+    neural_config = NeuralFastConfig(
+        n=3,
+        vocab_size=None,
+        embd_dim=384,       # dimensione embedding
+        block_size=64,      # lunghezza massima del contesto  # se vuoi fare un test veloce
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+
+    print(f"{Colors.OKBLUE}[INFO]{Colors.ENDC} Preparing tokenizer and loading Neural Fast model...")
+    tester = NeuralTester(config=neural_config)
+    tester.sync()
+
+    print(f"{Colors.OKBLUE}[INFO]{Colors.ENDC} Evaluating Neural Fast model on test set...")
+    ppl = tester.evaluate()
+    print(f"\n{Colors.OKGREEN}[Test Complete]{Colors.ENDC} Neural Fast model perplexity on test set: {ppl:.2f}")

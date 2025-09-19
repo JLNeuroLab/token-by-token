@@ -301,7 +301,7 @@ We implemented **two versions** of the neural n-embedding model:
 
 **Results:**
 
-- Perplexity (validation set): **62.4458**
+- Perplexity (test set): **62.4458**
 - Observations: Produces more coherent sequences compared to the classic n-gram; captures some stylistic features of Shakespeare.
 
 **Plots:**
@@ -374,7 +374,7 @@ We conducted **32 experiments across different hyperparameter settings** (embedd
 
 **Results:**
 
-- Perplexity (validation set): **14.53**
+- Perplexity (test set): **14.53**
 - Observations: Best performance overall; generates fluent, stylistically faithful text resembling Shakespeare.
 ---
 #### GPT Experiments – Selected Models
