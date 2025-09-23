@@ -60,7 +60,7 @@ def _flatten(argv):
     result = []
     for x in argv:
         if isinstance(x, list):
-            result.extend(_flatten(x))
+            result.extend(_flatten(x)) 
         else:
             result.append(str(x))
     return result
@@ -208,14 +208,16 @@ def show_intro():
 Examples:
 {Colors.HEADER}
 Train examples:
-{Colors.WARNING}train{Colors.ENDC} --model gpt --max_iters 5000 --dropout 0.1 --embd_dim 128 --n_layer 4
-{Colors.WARNING}train{Colors.ENDC} --model ngram --n 3 --tune_lambdas --force_retrain
-{Colors.WARNING}train{Colors.ENDC} --model neural --n 3 --epochs 10 --batch_size 32 --block_size 8 --embedding_dim 16 --force_retrain
+{Colors.WARNING}train{Colors.ENDC}  --model gpt --epochs 10 --batch_size 128 --block_size 64 --embd_dim 384 --n_layer 4 --n_heads 6 --lr 3e-4 --force_model
+{Colors.WARNING}train{Colors.ENDC} --model ngram --n 3 --tune_lambdas --max_k 800 --force_model
+{Colors.WARNING}train{Colors.ENDC} --model neural_fast --n 3 --epochs 10 --batch_size 128 --block_size 32 --embd_dim 384 --lr 3e-4 --patience 3 --force_model
+{Colors.WARNING}train{Colors.ENDC} --model neural_slow --n 3 --epochs 10 --batch_size 64 --block_size 16 --embd_dim 256 --lr 3e-4 --patience 3 --force_model
 {Colors.HEADER}
 Generate examples:
-{Colors.WARNING}generate{Colors.ENDC} --model gpt   --prompt "To be or not to be" --max_new_tokens 100
-{Colors.WARNING}generate{Colors.ENDC} --model ngram --prompt "Once upon a time"   --max_new_tokens 100
-{Colors.WARNING}generate{Colors.ENDC} --model neural_fast --prompt "Boss, I'm tired"  --max_new_tokens 100
+{Colors.WARNING}generate{Colors.ENDC} --model gpt --prompt "The meaning of life is" --max_new_tokens 100 --top_k 50 --top_p 0.95 --temperature 0.9
+{Colors.WARNING}generate{Colors.ENDC} --model ngram --prompt "To be or not to" --max_new_tokens 100 --top_k 40 
+{Colors.WARNING}generate{Colors.ENDC} --model neural_fast --prompt "In a galaxy far away" --max_new_tokens 100 --top_k 50 --top_p 0.95 --temperature 0.9
+{Colors.WARNING}generate{Colors.ENDC} --model neural --prompt "Once upon a time" --max_new_tokens 100 --top_k 50 --top_p 0.9 --temperature 0.9
 {Colors.HEADER}
 Available modes:
 {Colors.WARNING}train{Colors.ENDC}     Train a model from scratch on Shakespeare
